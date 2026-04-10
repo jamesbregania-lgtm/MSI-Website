@@ -164,7 +164,7 @@ if (createEmployeeBtn) {
     });
 }
 
-/* URL Hash */
+/*URL Hash */
 (function () {
     const hash = window.location.hash.replace('#', '');
     if (hash === 'clients') {

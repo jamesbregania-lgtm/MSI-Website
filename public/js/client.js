@@ -126,13 +126,7 @@ function parseDateStr(dateStr) {
     return null;
 }
 
-// Core calculation — uses the LAST UPDATE DATE (or install date if no updates)
-// as the anchor point so the formula stays correct after each update.
-//
-// Formula: anchorDate + (maintenanceIntervalHours - currentHours) / 24  days
-//
-// This means: "given the running hours recorded ON anchorDate, the machine will
-// reach the maintenance threshold on maintenanceDate."
+
 function calculateNextMaintenanceResult(dateInstalled, runningHoursSeconds, record, maintenanceIntervalHours = 14000) {
     if (!runningHoursSeconds && runningHoursSeconds !== 0) return { label: '—', date: null };
 
@@ -201,7 +195,7 @@ function findMachineIndexByRecord(record) {
     return idx >= 0 ? idx : -1;
 }
 
-// ── Pagination helpers ──────────────────────────────────────────────────────
+//  Pagination helpers 
 
 function getTotalPages(records) {
     return Math.max(1, Math.ceil(records.length / PAGE_SIZE));
@@ -245,14 +239,14 @@ window.changePage = function(delta) {
     goToPage(currentPage + delta);
 };
 
-// ── Warning icon SVG ────────────────────────────────────────────────────────
+//  Warning icon SVG 
 const WARNING_ICON_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
      fill="#e67e22" class="warning-icon" aria-label="Maintenance due soon">
   <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
 </svg>`;
 
-// ── Table rendering ─────────────────────────────────────────────────────────
+//  Table rendering ─
 
 function renderTable(records) {
     const tbody = document.getElementById('machine-tbody');
@@ -318,7 +312,7 @@ function filterSerial() {
     renderTable(filteredMachines);
 }
 
-// ── Detail popup ────────────────────────────────────────────────────────────
+//  Detail popup 
 
 const detailPopup = document.getElementById('detailPopup');
 const detailList = document.getElementById('detailList');
@@ -373,7 +367,7 @@ detailPopup.addEventListener('click', (e) => {
     }
 });
 
-// ── Unit update history builder ─────────────────────────────────────────────
+//  Unit update history builder ─
 
 function buildHistoryRows(record) {
     const rows = [];
@@ -399,7 +393,7 @@ function buildHistoryRows(record) {
     return rows;
 }
 
-// ── History modal ───────────────────────────────────────────────────────────
+//  History modal ─
 
 const historyPopup = document.getElementById('historyPopup');
 const historyList = document.getElementById('historyList');
@@ -432,7 +426,7 @@ historyPopup.addEventListener('click', (e) => {
     }
 });
 
-// ── Edit / Update modal ─────────────────────────────────────────────────────
+//  Edit / Update modal ─
 
 const editPopup = document.getElementById('editPopup');
 const closeEditPopup = document.getElementById('closeEditPopup');
