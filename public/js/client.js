@@ -127,46 +127,24 @@ function parseDateStr(dateStr) {
 }
 
 
-function calculateNextMaintenanceResult(dateInstalled, runningHoursSeconds, record, maintenanceIntervalHours = 14000) {
-    if (!runningHoursSeconds && runningHoursSeconds !== 0) return { label: '—', date: null };
-
-    const currentHours = runningHoursSeconds / 3600;
-    const hoursRemaining = maintenanceIntervalHours - currentHours;
-
-    if (hoursRemaining <= 0) {
-        return { label: 'Overdue', date: null };
+function calculateNextMaintenanceResult(dateInstalled, runningHoursSeconds, record, maintenanceIntervalDays = 750) {
+    // Parse the install date
+    let installDate = parseDateStr(dateInstalled);
+    
+    if (!installDate) {
+        return { label: '—', date: null };
     }
-
-    // Determine the anchor date:
-    // 1. If the record has update entries, use the date of the LATEST update.
-    // 2. Otherwise fall back to the original install date.
-    let anchorDate = null;
-
-    if (record && Array.isArray(record.updates) && record.updates.length > 0) {
-        const lastUpdate = record.updates[record.updates.length - 1];
-        anchorDate = parseDateStr(lastUpdate.date);
-    }
-
-    // Fall back to install date if no update date was resolved
-    if (!anchorDate) {
-        anchorDate = parseDateStr(dateInstalled);
-    }
-
-    // Last resort: use today so the UI never breaks
-    if (!anchorDate) {
-        anchorDate = new Date();
-        anchorDate.setHours(0, 0, 0, 0);
-    }
-
-    const daysRemaining = hoursRemaining / 24;
-    const maintenanceDate = new Date(anchorDate);
-    maintenanceDate.setDate(anchorDate.getDate() + Math.round(daysRemaining));
-
+    
+    // Calculate maintenance date: install date + 750 days
+    const maintenanceDate = new Date(installDate);
+    maintenanceDate.setDate(installDate.getDate() + maintenanceIntervalDays);
+    
     const monthNames = [
-        'January','February','March','April','May','June',
-        'July','August','September','October','November','December'
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
     ];
     const label = `${monthNames[maintenanceDate.getMonth()]} ${maintenanceDate.getDate()}, ${maintenanceDate.getFullYear()}`;
+    
     return { label, date: maintenanceDate };
 }
 
@@ -174,15 +152,168 @@ function calculateNextMaintenance(dateInstalled, runningHoursSeconds, record) {
     return calculateNextMaintenanceResult(dateInstalled, runningHoursSeconds, record).label;
 }
 
-// Returns true if maintenance is overdue or falls within the next 30 days
+// Returns true if maintenance is overdue or within the next 30 calendar days
+// Fix: Use Math.floor instead of Math.ceil for more accurate "within 30 days" calculation
 function isWithin30Days(dateInstalled, runningHoursSeconds, record) {
     const result = calculateNextMaintenanceResult(dateInstalled, runningHoursSeconds, record);
-    if (result.label === 'Overdue') return true;
     if (!result.date) return false;
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const diff = (result.date - today) / (1000 * 60 * 60 * 24);
-    return diff <= 30;
+    const diffDays = Math.floor((result.date - today) / (1000 * 60 * 60 * 24));
+    // Show warning if due today (diffDays === 0) or within next 30 days OR overdue (diffDays < 0)
+    return diffDays <= 30;
+}
+
+// Fix parts expiration: change "due soon" from 7 days to 30 days to match maintenance
+function getPartStatus(currentHours, part, record) {
+    let anchorDate = null;
+
+    // Get latest update date
+    if (record?.updates?.length > 0) {
+        const lastUpdate = record.updates[record.updates.length - 1];
+        anchorDate = parseDateStr(lastUpdate.date);
+    }
+
+    // Fallback to install date
+    if (!anchorDate) {
+        anchorDate = parseDateStr(record.dateInstalled);
+    }
+
+    // Final fallback
+    if (!anchorDate) {
+        anchorDate = new Date();
+    }
+
+    let expiryDate = null;
+    let isOverdue = false;
+    let isDueSoon = false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // =========================
+    // ✅ MONTH-BASED
+    // =========================
+    if (part.expiryMonths) {
+        expiryDate = addMonths(anchorDate, part.expiryMonths);
+    }
+
+    // =========================
+    // ✅ HOURS-BASED
+    // =========================
+    else if (part.expiryHours) {
+        const hoursLeft = part.expiryHours - currentHours;
+
+        expiryDate = new Date(anchorDate);
+
+        if (!isNaN(hoursLeft)) {
+            const daysRemaining = Math.round(hoursLeft / 24);
+            expiryDate.setDate(expiryDate.getDate() + daysRemaining);
+        }
+    }
+
+    // =========================
+    // ❗ SAFETY CHECK
+    // =========================
+    if (!expiryDate || isNaN(expiryDate.getTime())) {
+        return {
+            expiryDate: null,
+            isOverdue: false,
+            isDueSoon: false,
+            label: 'No expiry set'
+        };
+    }
+
+    // =========================
+    // STATUS CHECK
+    // =========================
+    const diffDays = Math.floor((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+    isOverdue = diffDays < 0;
+    isDueSoon = diffDays >= 0 && diffDays <= 7;  // Parts warn 7 days before expiry
+
+    // =========================
+    // FORMAT DATE
+    // =========================
+    const monthNames = [
+        'January','February','March','April','May','June',
+        'July','August','September','October','November','December'
+    ];
+    const dayNames = [
+        'Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'
+    ];
+
+    const formattedDate = `${dayNames[expiryDate.getDay()]}, ${monthNames[expiryDate.getMonth()]} ${expiryDate.getDate()}, ${expiryDate.getFullYear()}`;
+
+    // =========================
+    // FINAL LABEL - NO "OVERDUE" prefix
+    // =========================
+    const label = formattedDate;
+
+    return {
+        expiryDate,
+        isOverdue,
+        isDueSoon,
+        label
+    };
+}
+
+// Fix the warning icon display in renderTable - ensure it shows for BOTH conditions
+// The current code is correct but add a check for "due today" as well
+function renderTable(records) {
+    const tbody = document.getElementById('machine-tbody');
+
+    if (!records.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="loading-row">No records found.</td></tr>`;
+        document.getElementById('pagination-bar').style.display = 'none';
+        return;
+    }
+
+    records.forEach(r => {
+        if (typeof r._runningSeconds === 'undefined') {
+            r._runningSeconds = parseRunningHoursToSeconds(r.runningHours);
+        }
+    });
+
+    const pageRecords = getPageSlice(records, currentPage);
+    const globalOffset = (currentPage - 1) * PAGE_SIZE;
+
+    tbody.innerHTML = pageRecords.map((r, i) => {
+        const globalI = globalOffset + i;
+        const recordIndex = findMachineIndexByRecord(r);
+
+        const nextMaintenance = calculateNextMaintenance(r.dateInstalled, r._runningSeconds, r);
+        
+        // Check BOTH conditions for warning icon
+        const maintenanceDueSoon = isWithin30Days(r.dateInstalled, r._runningSeconds, r);
+        const partsDueSoon = hasDueSoonPart(r);
+        const showWarning = maintenanceDueSoon || partsDueSoon;
+
+        const numCell = showWarning
+            ? `<td class="warn-cell">
+                 <span class="maintenance-warning" title="Maintenance or parts expiration due soon — click to update"
+                       onclick="event.stopPropagation(); openEditModal(${recordIndex})">
+                   ${WARNING_ICON_SVG}
+                 </span>
+                </td>`
+            : `<td>${globalI + 1}</td>`;
+
+        return `
+            <tr class="clickable-row" onclick="showDetails(${recordIndex})">
+                ${numCell}
+                <td>${r.unit || '—'}</td>
+                <td>${r.model || '—'}</td>
+                <td>${r.serialNo || '—'}</td>
+                <td>${formatDateDisplay(r.dateInstalled)}</td>
+                <td class="running-hours" data-index="${recordIndex}">${formatRunningHoursOnly(r._runningSeconds)}</td>
+                <td>${r.status || '—'}</td>
+                <td class="${nextMaintenance === 'Overdue' ? 'overdue' : ''}">${nextMaintenance}</td>
+             </tr>
+        `;
+    }).join('');
+
+    renderPagination(records);
 }
 
 function findMachineIndexByRecord(record) {
@@ -246,6 +377,93 @@ const WARNING_ICON_SVG = `
   <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
 </svg>`;
 
+// ── Parts Expiration Catalog ──────────────────────────────────────────────────
+// Expiration: months → hours (1 month = 30 days = 720 hrs); 8000 HRS = 8000 hrs
+const PARTS_CATALOG = {
+  CIJ: {
+    '9450': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ],
+    '9410': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ],
+    '9450S': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ],
+    '9450E': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ]
+  },
+  // Other units: models/parts to be added later
+  TTO: {},
+  'P&A': {},
+  DOD: {},
+  LASER: {},
+  SUNINE: {},
+  ANSER: {},
+};
+
+function addMonths(date, months) {
+    const d = new Date(date);
+    const originalDay = d.getDate();
+
+    d.setMonth(d.getMonth() + months);
+
+    // Fix overflow (e.g., Feb 30 → Feb 28)
+    if (d.getDate() < originalDay) {
+        d.setDate(0);
+    }
+
+    return d;
+}
+
+
+/**
+ * Returns true if ANY part on a machine record is due within 7 days or overdue.
+ * Used to show the ⚠ icon in the table.
+ */
+function hasDueSoonPart(record) {
+    const unit = (record.unit || '').toUpperCase().trim();
+    const unitKey = Object.keys(PARTS_CATALOG).find(k => k.toUpperCase() === unit);
+    if (!unitKey) return false;
+    
+    const models = PARTS_CATALOG[unitKey];
+    const modelKey = Object.keys(models).find(k => k.toUpperCase() === (record.model || '').toUpperCase().trim());
+    if (!modelKey) return false;
+    
+    const parts = models[modelKey];
+    const currentHours = (record._runningSeconds || 0) / 3600;
+    
+    // Check each part - if ANY part is overdue OR due soon, return true
+    for (const p of parts) {
+        const s = getPartStatus(currentHours, p, record);
+        if (s.isOverdue || s.isDueSoon) {
+            return true;  // Warning icon should appear
+        }
+    }
+    return false;
+}
+
 //  Table rendering ─
 
 function renderTable(records) {
@@ -272,7 +490,7 @@ function renderTable(records) {
 
         // Pass the full record so the calculation uses the correct anchor date
         const nextMaintenance = calculateNextMaintenance(r.dateInstalled, r._runningSeconds, r);
-        const warn = isWithin30Days(r.dateInstalled, r._runningSeconds, r);
+        const warn = isWithin30Days(r.dateInstalled, r._runningSeconds, r) || hasDueSoonPart(r);
 
         // The # cell is clickable (shows warning icon) when maintenance is near
         const numCell = warn
@@ -454,11 +672,116 @@ window.openEditModal = function(index) {
     document.getElementById('edit-description').value = record.description || '';
     document.getElementById('edit-history').value = record.history || '';
 
+    // ── Parts checker section ──────────────────────────────────────────────
+    const unitKey = Object.keys(PARTS_CATALOG).find(
+        k => k.toUpperCase() === (record.unit || '').toUpperCase().trim()
+    );
+
+    // Populate Unit selector
+    const unitSel = document.getElementById('parts-unit-sel');
+    unitSel.innerHTML = '<option value="">— Select Unit —</option>' +
+        Object.keys(PARTS_CATALOG).map(u =>
+            `<option value="${u}" ${u === unitKey ? 'selected' : ''}>${u}</option>`
+        ).join('');
+
+    // Populate Model selector based on the record's unit
+    populatePartsModelSel(unitKey || '', record.model || '', record._runningSeconds, record);
+
+    // Wire unit selector change
+    unitSel.onchange = () => {
+    populatePartsModelSel(unitSel.value, '', record._runningSeconds, record);
+};
+
     // Store which record we're editing
     editForm.dataset.index = index;
 
     editPopup.style.display = 'grid';
 };
+function populatePartsModelSel(unitKey, preselectedModel, runningSeconds, record) {
+    const modelSel = document.getElementById('parts-model-sel');
+    const partsBody = document.getElementById('parts-tbody');
+
+    const models = unitKey ? (PARTS_CATALOG[unitKey] || {}) : {};
+    const modelKeys = Object.keys(models);
+
+    if (!modelKeys.length) {
+        modelSel.innerHTML = '<option value="">— No models yet —</option>';
+        partsBody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:12px;">No parts data for this unit yet.</td></tr>`;
+        return;
+    }
+
+    modelSel.innerHTML = '<option value="">— Select Model —</option>' +
+        modelKeys.map(m =>
+            `<option value="${m}" ${m.toUpperCase() === preselectedModel.toUpperCase() ? 'selected' : ''}>${m}</option>`
+        ).join('');
+
+    // Auto-render if a model is preselected
+    const matched = modelKeys.find(m => m.toUpperCase() === preselectedModel.toUpperCase());
+    if (matched) {
+        renderPartsList(unitKey, matched, runningSeconds, record);
+    } else {
+        partsBody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:12px;">Select a model to view parts.</td></tr>`;
+    }
+
+    modelSel.onchange = () => {
+        renderPartsList(unitKey, modelSel.value, runningSeconds, record);
+    };
+}
+function renderPartsList(unitKey, modelKey, runningSeconds, record) {
+    const partsBody = document.getElementById('parts-tbody');
+    if (!unitKey || !modelKey) {
+        partsBody.innerHTML = `<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;">Select a model to view parts.</td></tr>`;
+        return;
+    }
+    const parts = (PARTS_CATALOG[unitKey] || {})[modelKey] || [];
+    if (!parts.length) {
+        partsBody.innerHTML = `<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;">No parts listed for this model.</td></tr>`;
+        return;
+    }
+    const currentHours = (runningSeconds || 0) / 3600;
+    partsBody.innerHTML = parts.map(p => {
+        const s = getPartStatus(currentHours, p, record);
+        let statusBadge, rowClass = '';
+        let displayLabel = s.label;
+        
+        if (s.isOverdue) {
+            statusBadge = `<span class="parts-badge parts-badge-overdue">OVERDUE</span>`;
+            rowClass = 'parts-row-overdue';
+            // Remove "OVERDUE — " prefix from the label since badge already shows it
+            displayLabel = s.label.replace(/^OVERDUE —\s*/, '');
+        } else if (s.isDueSoon) {
+            statusBadge = `<span class="parts-badge parts-badge-soon">⚠ DUE SOON</span>`;
+            rowClass = 'parts-row-soon';
+            // Remove "DUE SOON — " prefix if it exists
+            displayLabel = s.label.replace(/^DUE SOON —\s*/, '');
+        } else {
+            statusBadge = `<span class="parts-badge parts-badge-ok">OK</span>`;
+        }
+        
+        return `<tr class="${rowClass}">
+            <td class="parts-cell-part">${escapeHtml(p.name)}</td>
+            <td class="parts-cell-status">
+                <div class="parts-status-wrapper">
+                    ${statusBadge}
+                    <span class="parts-expiry-label">${escapeHtml(displayLabel)}</span>
+                </div>
+            </td>
+         </tr>`;
+    }).join('');
+}
+
+// Helper function to prevent XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+        return c;
+    });
+}
 
 closeEditPopup.addEventListener('click', () => {
     editPopup.style.display = 'none';

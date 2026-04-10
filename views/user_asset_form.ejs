@@ -22,7 +22,6 @@
                 <a href="/logout" class="btn logout-btn">Logout</a>
             </div>
         </div>
-
         <div class="card">
             <div class="card-header">
                 <div>
@@ -51,11 +50,13 @@
                     <label for="unit">Unit</label>
                     <select id="unit" name="unit" required>
                         <option value="">Select a unit</option>
-                        <option value="2200" <%= (savedAsset && savedAsset.unit === '2200') ? 'selected' : '' %>>2200</option>
                         <option value="CIJ" <%= (savedAsset && savedAsset.unit === 'CIJ') ? 'selected' : '' %>>CIJ</option>
                         <option value="TTO" <%= (savedAsset && savedAsset.unit === 'TTO') ? 'selected' : '' %>>TTO</option>
+                        <option value="P&A" <%= (savedAsset && savedAsset.unit === 'P&A') ? 'selected' : '' %>>P&A</option>
                         <option value="DOD" <%= (savedAsset && savedAsset.unit === 'DOD') ? 'selected' : '' %>>DOD</option>
                         <option value="LASER" <%= (savedAsset && savedAsset.unit === 'LASER') ? 'selected' : '' %>>LASER</option>
+                        <option value="SUNINE" <%= (savedAsset && savedAsset.unit === 'SUNINE') ? 'selected' : '' %>>SUNINE</option>
+                        <option value="ANSER" <%= (savedAsset && savedAsset.unit === 'ANSER') ? 'selected' : '' %>>ANSER</option>
                     </select>
                     <label for="model">Model</label>
                     <input type="text" id="model" name="model" placeholder="Enter model name" value="<%= savedAsset ? savedAsset.model : '' %>" required />

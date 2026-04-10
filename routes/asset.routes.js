@@ -5,6 +5,50 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Parts catalog with all models and their parts
+const PARTS_CATALOG = {
+  CIJ: {
+    '9450': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ],
+    '9410': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ],
+    '9450S': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ],
+    '9450E': [
+      { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
+      { name: 'ENM 47458 EHV COVER', expiryMonths: 6 },
+      { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
+      { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
+      { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
+      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+    ]
+  },
+  TTO: {},
+  'P&A': {},
+  DOD: {},
+  LASER: {},
+  SUNINE: {},
+  ANSER: {}
+};
+
 router.get('/new-machine', requireAuth, (req, res) => {
   const activeClients = clients
     .filter(c => c.status !== 'inactive')
@@ -18,13 +62,19 @@ router.get('/new-machine', requireAuth, (req, res) => {
     selectedClientId,
     success: null,
     error: null,
-    savedAsset: null
+    savedAsset: null,
+    partsCatalog: PARTS_CATALOG
   });
 });
 
 router.post('/new-machine', requireAuth, (req, res) => {
   const activeClients = clients.filter(c => c.status !== 'inactive');
   let { clientId, unit, model, serialNo, dateInstalled, runningHours, status, description, history } = req.body;
+
+  // Normalize model to uppercase for consistency
+  if (model) {
+    model = model.toUpperCase().trim();
+  }
 
   // Fallback: if clientId is empty but clientName was submitted, match by name.
   if (!clientId && req.body.clientName) {
@@ -42,7 +92,8 @@ router.post('/new-machine', requireAuth, (req, res) => {
       selectedClientId: clientId || '',
       success: null,
       error: 'Please fill in all required fields (Client, Unit, Model, Serial No, Date Installed, Running Hours, Status).',
-      savedAsset: null
+      savedAsset: null,
+      partsCatalog: PARTS_CATALOG
     });
   }
 
@@ -88,7 +139,8 @@ router.post('/new-machine', requireAuth, (req, res) => {
     selectedClientId: clientId,
     success: 'Printer asset request submitted successfully.',
     error: null,
-    savedAsset: asset
+    savedAsset: asset,
+    partsCatalog: PARTS_CATALOG
   });
 });
 

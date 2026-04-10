@@ -125,7 +125,7 @@
 
     <!-- ── Edit / Update Modal (opened only via warning icon) ── -->
     <div class="popup-overlay" id="editPopup" style="display:none;">
-        <div class="popup-card" style="width: min(520px, 95vw);">
+        <div class="popup-card" style="width: min(620px, 96vw); max-height: 90vh; overflow-y: auto;">
             <button class="close-btn" id="closeEditPopup">×</button>
             <h3>Update Machine Record</h3>
 
@@ -166,6 +166,46 @@
                     <label class="edit-label" for="edit-history">History</label>
                     <textarea class="edit-input" id="edit-history" rows="3" placeholder="History / notes"></textarea>
 
+                </div>
+
+                <!-- ── Parts Expiration Checker ───────────────────────── -->
+                <div style="margin-top:18px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#e67e22"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                        <span style="font-size:13px;font-weight:700;color:var(--navy);">Parts Expiration Checker</span>
+                    </div>
+
+                    <!-- Unit + Model selectors side by side -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                        <div>
+                            <label style="font-size:11.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Unit</label>
+                            <select id="parts-unit-sel" class="edit-input" style="width:100%;font-size:12.5px;padding:7px 9px;">
+                                <option value="">— Select Unit —</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:11.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Model</label>
+                            <select id="parts-model-sel" class="edit-input" style="width:100%;font-size:12.5px;padding:7px 9px;">
+                                <option value="">— Select Model —</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Parts table -->
+                    <div style="border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:var(--surface);">
+                                    <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);">Part</th>
+                
+                                    <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);">Status / Remaining</th>
+                                </tr>
+                            </thead>
+                            <tbody id="parts-tbody">
+                                <tr><td colspan="3" style="text-align:center;color:var(--muted);padding:14px;font-size:13px;">Select a unit and model above.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div style="margin-top:16px; display:flex; gap:10px; justify-content:flex-end;">

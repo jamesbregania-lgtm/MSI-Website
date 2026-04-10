@@ -173,3 +173,140 @@ if (clientInput) {
     }, 150);
   });
 }
+
+// ════════════════════════════════════════════════════════════════════════════════
+// MODEL AUTOCOMPLETE (live search from PARTS_CATALOG)
+// ════════════════════════════════════════════════════════════════════════════════
+
+const modelInput = document.getElementById('modelInput');
+const modelDropdown = document.getElementById('modelDropdown');
+const unitSelect = document.getElementById('unit');
+
+let filteredModels = [];
+let modelFocusedIndex = -1;
+
+function getAvailableModels(unitKey) {
+  if (!PARTS_CATALOG[unitKey]) return [];
+  return Object.keys(PARTS_CATALOG[unitKey]).filter(m => PARTS_CATALOG[unitKey][m].length > 0);
+}
+
+function renderModelDropdown(items) {
+  filteredModels = items;
+
+  if (!items.length) {
+    modelDropdown.innerHTML = '<li class="combo-empty">No models available.</li>';
+    openModelDropdown();
+    return;
+  }
+
+  modelDropdown.innerHTML = items.map((model, idx) => `
+    <li class="combo-item" data-index="${idx}" data-model="${model}" tabindex="0">${model}</li>
+  `).join('');
+
+  modelDropdown.querySelectorAll('.combo-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const model = item.dataset.model;
+      setSelectedModel(model);
+    });
+  });
+
+  openModelDropdown();
+}
+
+function openModelDropdown() {
+  modelDropdown.classList.add('open');
+}
+
+function closeModelDropdown() {
+  modelDropdown.classList.remove('open');
+  modelFocusedIndex = -1;
+}
+
+function setSelectedModel(model) {
+  if (!model) return;
+  modelInput.value = model.toUpperCase();
+  closeModelDropdown();
+}
+
+function filterModels(value) {
+  const selectedUnit = unitSelect.value;
+  if (!selectedUnit) {
+    modelDropdown.innerHTML = '<li class="combo-empty">Select a unit first.</li>';
+    openModelDropdown();
+    return;
+  }
+
+  const availableModels = getAvailableModels(selectedUnit);
+  const query = value.trim().toUpperCase();
+
+  const matches = availableModels
+    .filter(m => m.includes(query))
+    .sort();
+  
+  renderModelDropdown(matches);
+}
+
+if (modelInput) {
+  modelInput.addEventListener('input', (event) => {
+    const query = event.target.value;
+    if (query.trim().length === 0) {
+      closeModelDropdown();
+    } else {
+      filterModels(query);
+    }
+  });
+
+  modelInput.addEventListener('keydown', (event) => {
+    const items = modelDropdown.querySelectorAll('.combo-item');
+    if (!items.length) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      modelFocusedIndex = Math.min(modelFocusedIndex + 1, items.length - 1);
+      items[modelFocusedIndex].focus();
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      modelFocusedIndex = Math.max(modelFocusedIndex - 1, 0);
+      items[modelFocusedIndex].focus();
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const sel = items[modelFocusedIndex];
+      if (sel) {
+        setSelectedModel(sel.dataset.model);
+      }
+    }
+
+    if (event.key === 'Escape') {
+      closeModelDropdown();
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.combo-wrap') || !modelInput.closest('.combo-wrap').contains(event.target)) {
+      closeModelDropdown();
+    }
+  });
+
+  modelInput.addEventListener('focus', () => {
+    const selectedUnit = unitSelect.value;
+    if (!selectedUnit) {
+      modelDropdown.innerHTML = '<li class="combo-empty">Select a unit first.</li>';
+      openModelDropdown();
+    } else if (modelInput.value.trim()) {
+      filterModels(modelInput.value);
+    } else {
+      closeModelDropdown();
+    }
+  });
+
+  unitSelect.addEventListener('change', () => {
+    modelInput.value = '';
+    closeModelDropdown();
+  });
+}
