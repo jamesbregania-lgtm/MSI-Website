@@ -17,7 +17,6 @@ const accounts = [
     "branch": "Davao",
     "status": "active"
   },
-  
 ];
 
 module.exports = accounts;

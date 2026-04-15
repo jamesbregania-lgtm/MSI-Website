@@ -401,8 +401,6 @@ const WARNING_ICON_SVG = `
   <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
 </svg>`;
 
-// ── Parts Expiration Catalog ──────────────────────────────────────────────────
-// Expiration: months → hours (1 month = 30 days = 720 hrs); 8000 HRS = 8000 hrs
 const PARTS_CATALOG = {
   CIJ: {
     '9450': [
@@ -411,7 +409,12 @@ const PARTS_CATALOG = {
       { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
       { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
       { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
-      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+      { name: 'A40846 RECOVERY TOOL', expiryHours: 8000 },
+      { name: 'ENM 40209 AIR FILTER' , expiryHours: 8000},
+      { name: 'ENM 19134 INK FILTER' , expiryHours: 8000},
+      { name: 'ENM 40830 IP54 OUTLET FOAM FILTER' , expiryHours: 8000},
+      { name: 'ENM 5629 PRESSURE PUMP' , expiryHours: 8000}
+      
     ],
     '9410': [
       { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
@@ -419,7 +422,11 @@ const PARTS_CATALOG = {
       { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
       { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
       { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
-      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+      { name: 'A40846 RECOVERY TOOL', expiryHours: 8000 },
+      { name: 'ENM 40209 AIR FILTER' , expiryHours: 8000},
+      { name: 'ENM 19134 INK FILTER' , expiryHours: 8000},
+      { name: 'ENM 40830 IP54 OUTLET FOAM FILTER' , expiryHours: 8000},
+      { name: 'ENM 5629 PRESSURE PUMP' , expiryHours: 8000}
     ],
     '9450S': [
       { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
@@ -427,7 +434,11 @@ const PARTS_CATALOG = {
       { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
       { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
       { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
-      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+      { name: 'A40846 RECOVERY TOOL', expiryHours: 8000 },
+      { name: 'ENM 40209 AIR FILTER' , expiryHours: 8000},
+      { name: 'ENM 19134 INK FILTER' , expiryHours: 8000},
+      { name: 'ENM 40830 IP54 OUTLET FOAM FILTER' , expiryHours: 8000},
+      { name: 'ENM 5629 PRESSURE PUMP' , expiryHours: 8000}
     ],
     '9450E': [
       { name: 'ENM 38941 GUTTER BLOCK', expiryMonths: 4 },
@@ -435,7 +446,11 @@ const PARTS_CATALOG = {
       { name: 'ENM 49967 EQUIP PRINT HEADBOARD', expiryMonths: 6 },
       { name: 'ENM 46408 FOUR ELECTOVALVE BLOCK', expiryMonths: 4 },
       { name: 'ENM 38980 MODULATION ASSEMBLY', expiryMonths: 6 },
-      { name: 'PREVENTIVE MAINTENANCE', expiryHours: 8000 }
+      { name: 'A40846 RECOVERY TOOL', expiryHours: 8000 },
+      { name: 'ENM 40209 AIR FILTER' , expiryHours: 8000},
+      { name: 'ENM 19134 INK FILTER' , expiryHours: 8000},
+      { name: 'ENM 40830 IP54 OUTLET FOAM FILTER' , expiryHours: 8000},
+      { name: 'ENM 5629 PRESSURE PUMP' , expiryHours: 8000}
     ]
   },
   // Other units: models/parts to be added later
@@ -565,18 +580,82 @@ window.showDetails = function(index) {
 
     // Pass full record so anchor date is resolved correctly
     const nextMaintenance = calculateNextMaintenance(record.dateInstalled, record._runningSeconds, record);
-    const historyRows = buildHistoryRows(record);
+    const maintenanceStatus = getMaintenanceStatus(record.dateInstalled, record._runningSeconds, record, 30);
+    const { unitKey, modelKey } = getPartsCatalogLocation(record);
+    const partsForModel = unitKey && modelKey ? ((PARTS_CATALOG[unitKey] || {})[modelKey] || []) : [];
+    const currentHours = (record._runningSeconds || 0) / 3600;
+
+    const detailParts = [];
+
+    if (maintenanceStatus.label !== '—') {
+        detailParts.push({
+            name: 'MAINTENANCE',
+            date: maintenanceStatus.label
+        });
+    }
+
+    partsForModel.forEach(part => {
+        const partStatus = getPartStatus(currentHours, part, record);
+        detailParts.push({
+            name: part.name,
+            date: partStatus.label || '—'
+        });
+    });
+
+    const detailListItems = detailParts.length
+        ? detailParts.map(item => `<li class="detail-parts-item">
+                <span class="detail-parts-name">${escapeHtml(item.name)}</span>
+                <span class="detail-parts-date">${escapeHtml(item.date)}</span>
+            </li>`).join('')
+        : `<div class="detail-parts-empty">No parts data found for this model.</div>`;
+
+    const statusClass = (record.status || '').toLowerCase() === 'active' ? 'status-active'
+        : (record.status || '').toLowerCase() === 'decommissioned' ? 'status-decommissioned'
+        : 'status-inactive';
 
     detailList.innerHTML = `
-        <dt>Unit</dt><dd>${record.unit || '—'}</dd>
-        <dt>Model</dt><dd>${record.model || '—'}</dd>
-        <dt>Serial No.</dt><dd>${record.serialNo || '—'}</dd>
-        <dt>Date Installed</dt><dd>${formatDateDisplay(record.dateInstalled)}</dd>
-        <dt>Running Hours</dt><dd>${formatRunningHoursOnly(record._runningSeconds)} hrs</dd>
-        <dt>Maintenance</dt><dd id="detail-next-maintenance" class="${nextMaintenance === 'Overdue' ? 'overdue' : ''}">${nextMaintenance}</dd>
-        <dt>Status</dt><dd>${record.status || '—'}</dd>
-        <dt>Description</dt><dd>${record.description || '—'}</dd>
-        <dt>Submitted By</dt><dd>${submittedByText}</dd>
+        <div class="detail-identity">
+            <div class="detail-identity-cell">
+                <div class="detail-identity-label">Unit</div>
+                <div class="detail-identity-value">${escapeHtml(record.unit || '—')}</div>
+            </div>
+            <div class="detail-identity-cell">
+                <div class="detail-identity-label">Model</div>
+                <div class="detail-identity-value">${escapeHtml(record.model || '—')}</div>
+            </div>
+            <div class="detail-identity-cell">
+                <div class="detail-identity-label">Serial No.</div>
+                <div class="detail-identity-value">${escapeHtml(record.serialNo || '—')}</div>
+            </div>
+        </div>
+        <div class="detail-field">
+            <span class="detail-field-label">Installed</span>
+            <span class="detail-field-value">${formatDateDisplay(record.dateInstalled)}</span>
+        </div>
+        <div class="detail-field">
+            <span class="detail-field-label">Running Hours</span>
+            <span class="detail-field-value">${formatRunningHoursOnly(record._runningSeconds)} hrs</span>
+        </div>
+        <div class="detail-field">
+            <span class="detail-field-label">Maintenance</span>
+            <span class="detail-field-value${nextMaintenance === 'Overdue' ? ' overdue' : ''}" id="detail-next-maintenance">${nextMaintenance}</span>
+        </div>
+        <div class="detail-field">
+            <span class="detail-field-label">Status</span>
+            <span class="detail-field-value"><span class="status-badge ${statusClass}">${escapeHtml(record.status || '—')}</span></span>
+        </div>
+        <div class="detail-field">
+            <span class="detail-field-label">Description</span>
+            <span class="detail-field-value" style="${!record.description ? 'color:var(--muted);font-style:italic;' : ''}">${escapeHtml(record.description || 'No description')}</span>
+        </div>
+        <div class="detail-field" style="border-bottom:none;">
+            <span class="detail-field-label">Submitted By</span>
+            <span class="detail-field-value">${escapeHtml(submittedByText)}</span>
+        </div>
+        <div class="detail-parts-section">
+            <div class="detail-parts-heading">Parts / Maintenance</div>
+            <ul class="detail-parts-list">${detailListItems}</ul>
+        </div>
     `;
 
     // Show/hide View History button
@@ -871,29 +950,30 @@ function renderPartsList(unitKey, modelKey, runningSeconds, record, draftState =
         : record;
 
     const maintenanceStatus = getMaintenanceStatus(record.dateInstalled, runningSeconds, statusRecord, 30);
-    let maintenanceBadge = '<span class="parts-badge parts-badge-ok">OK</span>';
-    let maintenanceRowClass = '';
+    let maintenanceRow = '';
 
-    if (maintenanceStatus.isOverdue) {
-        maintenanceBadge = `<button type="button" class="parts-badge parts-badge-overdue parts-badge-action" title="Mark maintenance as completed today" onclick="markMaintenanceAsServiced(${recordIndex})">OVERDUE</button>`;
-        maintenanceRowClass = 'parts-row-overdue';
-    } else if (maintenanceStatus.isDueSoon) {
-        maintenanceBadge = `<button type="button" class="parts-badge parts-badge-soon parts-badge-action" title="Mark maintenance as completed today" onclick="markMaintenanceAsServiced(${recordIndex})">⚠ DUE SOON</button>`;
-        maintenanceRowClass = 'parts-row-soon';
+    if (maintenanceStatus.isOverdue || maintenanceStatus.isDueSoon) {
+        const maintenanceBadge = maintenanceStatus.isOverdue
+            ? `<button type="button" class="parts-badge parts-badge-overdue parts-badge-action" title="Mark maintenance as completed today" onclick="markMaintenanceAsServiced(${recordIndex})">OVERDUE</button>`
+            : `<button type="button" class="parts-badge parts-badge-soon parts-badge-action" title="Mark maintenance as completed today" onclick="markMaintenanceAsServiced(${recordIndex})">⚠ DUE SOON</button>`;
+        const maintenanceRowClass = maintenanceStatus.isOverdue ? 'parts-row-overdue' : 'parts-row-soon';
+        maintenanceRow = `<tr class="${maintenanceRowClass}">
+            <td class="parts-cell-part">MAINTENANCE</td>
+            <td class="parts-cell-status">
+                <div class="parts-status-wrapper">
+                    ${maintenanceBadge}
+                    <span class="parts-expiry-label">${escapeHtml(maintenanceStatus.label)}</span>
+                </div>
+            </td>
+        </tr>`;
     }
-
-    const maintenanceRow = `<tr class="${maintenanceRowClass}">
-        <td class="parts-cell-part">OVERALL MAINTENANCE</td>
-        <td class="parts-cell-status">
-            <div class="parts-status-wrapper">
-                ${maintenanceBadge}
-                <span class="parts-expiry-label">${escapeHtml(maintenanceStatus.label)}</span>
-            </div>
-        </td>
-    </tr>`;
 
     const partRows = parts.map(p => {
         const s = getPartStatus(currentHours, p, statusRecord);
+        if (!s.isOverdue && !s.isDueSoon) {
+            return '';
+        }
+
         let statusBadge, rowClass = '';
         let displayLabel = s.label;
         
@@ -907,8 +987,6 @@ function renderPartsList(unitKey, modelKey, runningSeconds, record, draftState =
             rowClass = 'parts-row-soon';
             // Remove "DUE SOON — " prefix if it exists
             displayLabel = s.label.replace(/^DUE SOON —\s*/, '');
-        } else {
-            statusBadge = `<span class="parts-badge parts-badge-ok">OK</span>`;
         }
         
         return `<tr class="${rowClass}">
@@ -922,7 +1000,8 @@ function renderPartsList(unitKey, modelKey, runningSeconds, record, draftState =
          </tr>`;
     }).join('');
 
-    partsBody.innerHTML = maintenanceRow + partRows;
+    const alertRows = `${maintenanceRow}${partRows}`;
+    partsBody.innerHTML = alertRows || `<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:14px;font-size:13px;">No due soon or overdue items.</td></tr>`;
 }
 
 window.markMaintenanceAsServiced = async function(index) {
