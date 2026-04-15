@@ -22,45 +22,63 @@ function displayClientData() {
     document.getElementById('profile-location').textContent = client.location || 'N/A';
     document.getElementById('profile-avatar').textContent = client.name.charAt(0).toUpperCase();
 
-    if (APPS_SCRIPT_URL) {
-        loadMachines(client.name);
-    } else {
-        allMachines = Array.isArray(MACHINE_RECORDS) ? MACHINE_RECORDS : [];
-        document.getElementById('machine-count').textContent = allMachines.length;
-        filteredMachines = allMachines;
-        currentPage = 1;
+    allMachines = Array.isArray(MACHINE_RECORDS) ? MACHINE_RECORDS : [];
+    document.getElementById('machine-count').textContent = allMachines.length;
+    filteredMachines = allMachines;
+    currentPage = 1;
+    try {
         renderTable(filteredMachines);
+    } catch (error) {
+        const tbody = document.getElementById('machine-tbody');
+        tbody.innerHTML = `<tr><td colspan="8" class="loading-row">Failed to render records. Please refresh.</td></tr>`;
+        console.error('Render table error:', error);
     }
+
+    refreshMachinesFromServer();
 }
 
 displayClientData();
 
-async function loadMachines(clientName) {
+async function refreshMachinesFromServer() {
+    if (!client) return;
+
     try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?client=${encodeURIComponent(clientName)}`);
-        const data = await res.json();
-        allMachines = Array.isArray(data) ? data : [];
-        document.getElementById('machine-count').textContent = allMachines.length;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch(`/client/${encodeURIComponent(CLIENT_ID)}/machines`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            return;
+        }
+
+        const payload = await response.json();
+        if (!payload.ok || !Array.isArray(payload.machineRecords)) {
+            return;
+        }
+
+        allMachines = payload.machineRecords;
         filteredMachines = allMachines;
         currentPage = 1;
-        renderTable(filteredMachines);
-    } catch (err) {
-        allMachines = Array.isArray(MACHINE_RECORDS) ? MACHINE_RECORDS : [];
         document.getElementById('machine-count').textContent = allMachines.length;
-        filteredMachines = allMachines;
-        currentPage = 1;
         renderTable(filteredMachines);
+    } catch (error) {
+        // Keep preloaded rows when refresh fails.
+        console.warn('Machine refresh failed; using preloaded records.', error);
     }
 }
 
 // Format for date display
 function formatDateDisplay(dateStr) {
     if (!dateStr) return '—';
+    const rawDate = String(dateStr).trim();
     const monthNames = [
         'January','February','March','April','May','June',
         'July','August','September','October','November','December'
     ];
-    const ymdMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const ymdMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (ymdMatch) {
         const year = parseInt(ymdMatch[1], 10);
         const month = parseInt(ymdMatch[2], 10);
@@ -69,7 +87,7 @@ function formatDateDisplay(dateStr) {
             return `${monthNames[month - 1]} ${day}, ${year}`;
         }
     }
-    const dmyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    const dmyMatch = rawDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (dmyMatch) {
         const day = parseInt(dmyMatch[1], 10);
         const month = parseInt(dmyMatch[2], 10);
@@ -78,11 +96,11 @@ function formatDateDisplay(dateStr) {
             return `${monthNames[month - 1]} ${day}, ${year}`;
         }
     }
-    const date = new Date(dateStr);
+    const date = new Date(rawDate);
     if (!Number.isNaN(date.getTime())) {
         return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
     }
-    return dateStr;
+    return rawDate;
 }
 
 function parseRunningHoursToSeconds(value) {
@@ -113,12 +131,13 @@ function formatRunningHoursOnly(seconds) {
 // Helper: parse a date string (dd/mm/yyyy or yyyy-mm-dd) into a Date object
 function parseDateStr(dateStr) {
     if (!dateStr) return null;
-    const dmyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    const rawDate = String(dateStr).trim();
+    const dmyMatch = rawDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (dmyMatch) {
         const d = new Date(parseInt(dmyMatch[3], 10), parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
         return isNaN(d.getTime()) ? null : d;
     }
-    const ymdMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const ymdMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (ymdMatch) {
         const d = new Date(parseInt(ymdMatch[1], 10), parseInt(ymdMatch[2], 10) - 1, parseInt(ymdMatch[3], 10));
         return isNaN(d.getTime()) ? null : d;
@@ -1083,24 +1102,55 @@ editForm.addEventListener('submit', async (e) => {
         record.partServiceHours = clonePartMap(editDraft.partServiceHours);
     }
 
-    // Keep the modal open after saving so user can continue updating parts.
-    // Modal will close only when the user explicitly closes it.
-    editDraft = buildEditDraft(record, index);
+    try {
+        const response = await fetch(`/client/${encodeURIComponent(CLIENT_ID)}/machines/update`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                serialNo: record.serialNo,
+                model: record.model,
+                dateInstalled: record.dateInstalled,
+                runningHours: newRunningHours,
+                status: newStatus,
+                description: newDescription,
+                maintenanceServiceDate: editDraft ? editDraft.maintenanceServiceDate || '' : '',
+                partServiceDates: editDraft ? clonePartMap(editDraft.partServiceDates) : {},
+                partServiceHours: editDraft ? clonePartMap(editDraft.partServiceHours) : {},
+                updates: record.updates
+            })
+        });
 
-    const { unitKey, modelKey } = getPartsCatalogLocation(record);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+            throw new Error(payload.error || 'Failed to save updates.');
+        }
 
-    renderPartsList(unitKey, modelKey, record._runningSeconds, record, editDraft);
+        Object.assign(record, payload.machine);
+        record._runningSeconds = (Number(payload.machine.runningHours) || 0) * 3600;
 
-    // Re-render — warning icon will disappear automatically if the new
-    // maintenance date is now more than 30 days away
-    renderTable(filteredMachines);
+        // Keep the modal open after saving so user can continue updating parts.
+        // Modal will close only when the user explicitly closes it.
+        editDraft = buildEditDraft(record, index);
 
-    // Refresh detail popup if it is still open for this record
-    if (detailPopup.style.display !== 'none' && currentDetailIndex === index) {
-        showDetails(index);
+        const { unitKey, modelKey } = getPartsCatalogLocation(record);
+
+        renderPartsList(unitKey, modelKey, record._runningSeconds, record, editDraft);
+
+        // Re-render — warning icon will disappear automatically if the new
+        // maintenance date is now more than 30 days away
+        renderTable(filteredMachines);
+
+        // Refresh detail popup if it is still open for this record
+        if (detailPopup.style.display !== 'none' && currentDetailIndex === index) {
+            showDetails(index);
+        }
+
+        showToast('Record updated successfully.', 'success');
+    } catch (error) {
+        showToast(error.message || 'Failed to save updates.', 'warning');
     }
-
-    showToast('Record updated successfully.', 'success');
 });
 
 function showToast(message, type = 'success') {

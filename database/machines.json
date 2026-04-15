@@ -1,0 +1,31 @@
+[
+  {
+    "clientId": "alaska",
+    "clientName": "Alaska",
+    "location": "Neil Ella",
+    "unit": "CIJ",
+    "model": "9410",
+    "serialNo": "sd",
+    "dateInstalled": "01/12/2025",
+    "runningHours": 12,
+    "status": "Active",
+    "description": "asd",
+    "submittedBy": "MSI Employee User",
+    "maintenanceServiceDate": "",
+    "partServiceDates": {
+      "ENM 38941 GUTTER BLOCK": "15/04/2026"
+    },
+    "partServiceHours": {
+      "ENM 38941 GUTTER BLOCK": 12
+    },
+    "updates": [
+      {
+        "date": "15/04/2026",
+        "submittedBy": "MSI Employee User",
+        "status": "Active",
+        "runningHours": 12,
+        "description": "asd"
+      }
+    ]
+  }
+]

@@ -1,12 +1,11 @@
 const express = require('express');
-const clients = require('../data/clients');
+const { listActiveClients } = require('../database/clients.store');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/', requireAuth, (req, res) => {
-  const activeClients = clients
-    .filter(c => c.status !== 'inactive')
+router.get('/', requireAuth, async (req, res) => {
+  const activeClients = (await listActiveClients())
     .sort((a, b) => a.name.localeCompare(b.name));
 
   res.render('user_account', {

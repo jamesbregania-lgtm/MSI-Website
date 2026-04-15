@@ -1,6 +1,10 @@
 const express = require('express');
-const clients = require('../data/clients');
-const machines = require('../data/machines');
+const {
+  listActiveClients,
+  findClientById,
+  findActiveClientByName
+} = require('../database/clients.store');
+const { addMachine } = require('../database/machines.store');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -49,9 +53,8 @@ const PARTS_CATALOG = {
   ANSER: {}
 };
 
-router.get('/new-machine', requireAuth, (req, res) => {
-  const activeClients = clients
-    .filter(c => c.status !== 'inactive')
+router.get('/new-machine', requireAuth, async (req, res) => {
+  const activeClients = (await listActiveClients())
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name));
   const selectedClientId = req.query.clientId || '';
@@ -67,9 +70,11 @@ router.get('/new-machine', requireAuth, (req, res) => {
   });
 });
 
-router.post('/new-machine', requireAuth, (req, res) => {
-  const activeClients = clients.filter(c => c.status !== 'inactive');
+router.post('/new-machine', requireAuth, async (req, res) => {
+  const activeClients = await listActiveClients();
   let { clientId, unit, model, serialNo, dateInstalled, runningHours, status, description } = req.body;
+
+  clientId = String(clientId || '').trim().toLowerCase();
 
   // Normalize model to uppercase for consistency
   if (model) {
@@ -120,9 +125,7 @@ router.post('/new-machine', requireAuth, (req, res) => {
 
   // Fallback: if clientId is empty but clientName was submitted, match by name.
   if (!clientId && req.body.clientName) {
-    const matched = activeClients.find(
-      c => c.name.toLowerCase() === req.body.clientName.trim().toLowerCase()
-    );
+    const matched = await findActiveClientByName(req.body.clientName);
     if (matched) clientId = matched.id;
   }
 
@@ -139,7 +142,7 @@ router.post('/new-machine', requireAuth, (req, res) => {
     });
   }
 
-  const client = clients.find(c => c.id === clientId);
+  const client = await findClientById(clientId);
 
   // Convert date format into dd/mm/yyyy for consistent display/storage
   let installedDate = dateInstalled || '';
@@ -172,7 +175,7 @@ router.post('/new-machine', requireAuth, (req, res) => {
       : 'Unknown User'
   };
 
-  machines.push(asset);
+  await addMachine(asset);
 
   res.render('user_asset_form', {
     currentUser: req.session.user,

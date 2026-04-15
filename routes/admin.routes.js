@@ -8,7 +8,12 @@ const {
   resetUserPassword,
   setUserStatus
 } = require('../database/accounts.store');
-const clients = require('../data/clients');
+const {
+  listClients,
+  createClient,
+  updateClient,
+  setClientStatus
+} = require('../database/clients.store');
 const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -36,7 +41,7 @@ async function renderAdmin(req, res, { success = null, error = null } = {}) {
   const userAccounts = (await listUserAccounts())
     .slice()
     .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  const sortedClients = clients.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const sortedClients = (await listClients()).slice().sort((a, b) => a.name.localeCompare(b.name));
 
   res.render('admin_account', {
     currentUser: req.session.user,
@@ -158,43 +163,42 @@ router.post('/clients/create', requireAdmin, async (req, res) => {
     return await renderAdmin(req, res, { error: 'Client name is required.' });
   }
 
-  if (clients.some(c => c.id === id)) {
-    return await renderAdmin(req, res, { error: 'Client already exists.' });
-  }
-
-  clients.push({
+  const created = await createClient({
     id,
     name: clientName,
     location,
     status: 'active'
   });
 
+  if (!created) {
+    return await renderAdmin(req, res, { error: 'Client already exists.' });
+  }
+
   return res.redirect('/admin_account#clients');
 });
 
 router.post('/clients/update', requireAdmin, async (req, res) => {
   const { clientId } = req.body;
-  const target = clients.find(c => c.id === clientId);
+  const updated = await updateClient(clientId, {
+    name: properCase(req.body.clientName || ''),
+    location: properCase(req.body.location || '')
+  });
 
-  if (!target) {
+  if (!updated) {
     return await renderAdmin(req, res, { error: 'Client not found.' });
   }
-
-  target.name = properCase(req.body.clientName || '');
-  target.location = properCase(req.body.location || '');
 
   return res.redirect('/admin_account#clients');
 });
 
 router.post('/clients/toggle', requireAdmin, async (req, res) => {
   const { clientId, status } = req.body;
-  const target = clients.find(c => c.id === clientId);
+  const updated = await setClientStatus(clientId, status === 'inactive' ? 'inactive' : 'active');
 
-  if (!target) {
+  if (!updated) {
     return await renderAdmin(req, res, { error: 'Client not found.' });
   }
 
-  target.status = status === 'inactive' ? 'inactive' : 'active';
   return res.redirect('/admin_account#clients');
 });
 
