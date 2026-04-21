@@ -38,11 +38,16 @@ router.get('/login', (req, res) => {
 
 router.get('/account_setup', async (req, res) => {
   const token = String(req.query.token || '').trim();
+  const emptyFormData = {
+    fullName: '',
+    username: ''
+  };
 
   if (!token) {
     return res.status(400).render('account_setup', {
       invite: null,
-      error: 'Missing invite token.'
+      error: 'Missing invite token.',
+      formData: emptyFormData
     });
   }
 
@@ -51,7 +56,8 @@ router.get('/account_setup', async (req, res) => {
   if (!invite) {
     return res.status(404).render('account_setup', {
       invite: null,
-      error: 'This invite link is invalid or has expired.'
+      error: 'This invite link is invalid or has expired.',
+      formData: emptyFormData
     });
   }
 
@@ -60,14 +66,16 @@ router.get('/account_setup', async (req, res) => {
     await updateInvite(token, { status: 'expired' });
     return res.status(410).render('account_setup', {
       invite: null,
-      error: 'This invite link has expired.'
+      error: 'This invite link has expired.',
+      formData: emptyFormData
     });
   }
 
   if (invite.status !== 'pending') {
     return res.status(410).render('account_setup', {
       invite: null,
-      error: 'This invite link has already been used.'
+      error: 'This invite link has already been used.',
+      formData: emptyFormData
     });
   }
 

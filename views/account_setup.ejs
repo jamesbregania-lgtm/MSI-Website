@@ -109,6 +109,12 @@
 </head>
 <body>
 
+<%
+const safeFormData = (typeof formData !== 'undefined' && formData)
+    ? formData
+    : { fullName: '', username: '' };
+%>
+
 <div class="split-left">
     <div class="brand">
         <div class="brand-logo">M</div>
@@ -161,7 +167,7 @@
                     <label>Full Name</label>
                     <div class="input-wrap">
                         <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                        <input type="text" id="fullName" name="fullName" placeholder="Juan Dela Cruz" autocomplete="name" value="<%= formData && formData.fullName ? formData.fullName : '' %>">
+                        <input type="text" id="fullName" name="fullName" placeholder="Juan Dela Cruz" autocomplete="name" value="<%= safeFormData.fullName ? safeFormData.fullName : '' %>">
                     </div>
                     <small class="err-hint">Letters and spaces only.</small>
                 </div>
@@ -169,7 +175,7 @@
                     <label>Username</label>
                     <div class="input-wrap">
                         <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                        <input type="text" id="username" name="username" placeholder="jdelacruz" autocomplete="username" value="<%= formData && formData.username ? formData.username : '' %>">
+                        <input type="text" id="username" name="username" placeholder="jdelacruz" autocomplete="username" value="<%= safeFormData.username ? safeFormData.username : '' %>">
                     </div>
                     <small>3–20 characters, lowercase letters, numbers, underscores only.</small>
                     <small class="err-hint">Invalid format or already taken.</small>

@@ -252,5 +252,15 @@
     "expiresAt": "2026-04-22T07:19:53.918Z",
     "acceptedAt": "2026-04-21T07:56:08.500Z",
     "acceptedUsername": "hello"
+  },
+  {
+    "token": "f0c33241aed743f3ee67246f32708e42803d022c3959976b",
+    "email": "jamesbregania@gmail.com",
+    "role": "admin",
+    "branch": "Silang",
+    "department": "IT",
+    "status": "pending",
+    "createdAt": "2026-04-21T08:04:25.109Z",
+    "expiresAt": "2026-04-22T08:04:25.109Z"
   }
 ]
