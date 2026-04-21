@@ -1,13 +1,26 @@
 const fs = require('fs/promises');
 const path = require('path');
 
-const DB_FILE = path.join(__dirname, 'invites.json');
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : __dirname;
+const DB_FILE = path.join(DATA_DIR, 'invites.json');
+const LEGACY_DB_FILE = path.join(__dirname, 'invites.json');
 
 async function ensureDbFile() {
+  await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
+
   try {
     await fs.access(DB_FILE);
   } catch {
-    await fs.writeFile(DB_FILE, JSON.stringify([], null, 2), 'utf8');
+    try {
+      const legacyRaw = await fs.readFile(LEGACY_DB_FILE, 'utf8');
+      const legacyParsed = JSON.parse(legacyRaw);
+      const safeLegacy = Array.isArray(legacyParsed) ? legacyParsed : [];
+      await fs.writeFile(DB_FILE, JSON.stringify(safeLegacy, null, 2), 'utf8');
+    } catch {
+      await fs.writeFile(DB_FILE, JSON.stringify([], null, 2), 'utf8');
+    }
   }
 }
 

@@ -235,19 +235,20 @@ router.post('/employees/invite', requireAdmin, async (req, res) => {
   };
 
   await createInvite(invite);
+  const inviteLink = `${buildAppBaseUrl(req)}/account_setup?token=${encodeURIComponent(invite.token)}`;
 
   let successMessage = `Invite created for ${email}.`;
 
   try {
     const emailResult = await sendInviteEmail(req, invite);
     if (emailResult.sent) {
-      successMessage = `Invite email sent to ${email}.`;
+      successMessage = `Invite email sent to ${email}. Invite link: ${inviteLink}`;
     } else {
-      successMessage = `Invite created for ${email}. Email delivery is not configured. Set SMTP_USER, SMTP_PASS, and optionally SMTP_SERVICE=gmail in your .env, then restart the server.`;
+      successMessage = `Invite created for ${email}. Invite link: ${inviteLink} Email delivery is not configured. Set SMTP_USER, SMTP_PASS, and optionally SMTP_SERVICE=gmail in your .env, then restart the server.`;
     }
   } catch (error) {
     console.error('Invite email error:', error);
-    successMessage = `Invite created for ${email}. Email delivery failed (${error.code || error.message || 'unknown error'}), but the invite was saved locally.`;
+    successMessage = `Invite created for ${email}. Invite link: ${inviteLink} Email delivery failed (${error.code || error.message || 'unknown error'}), but the invite was saved locally.`;
   }
 
   return await renderAdmin(req, res, { success: successMessage });
