@@ -1,4 +1,4 @@
-
+/* ── SECTION SWITCHING ── */
 function switchSection(name, el) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -19,23 +19,23 @@ function closeOnOverlay(event, id) {
     if (event.target === event.currentTarget) closeModal(id);
 }
 
-/* For employee  */
+/* ── EDIT EMPLOYEE ── */
 function openEditEmployee(username, fullName, dept, branch) {
-    document.getElementById('editEmpUsername').value  = username;
-    document.getElementById('editEmpFullName').value  = fullName;
-    document.getElementById('editEmpDept').value      = dept;
-    document.getElementById('editEmpBranch').value    = branch;
+    document.getElementById('editEmpUsername').value = username;
+    document.getElementById('editEmpFullName').value = fullName;
+    document.getElementById('editEmpDept').value     = dept;
+    document.getElementById('editEmpBranch').value   = branch;
     openModal('modal-edit-employee');
 }
 
-/* Reset password for employee */
+/* ── RESET PASSWORD ── */
 function openResetPass(username) {
-    document.getElementById('resetPassUsername').value  = username;
+    document.getElementById('resetPassUsername').value      = username;
     document.getElementById('resetPassDisplay').textContent = username;
     openModal('modal-reset-pass');
 }
 
-/* Employee status */
+/* ── TOGGLE EMPLOYEE STATUS ── */
 function toggleEmployee(username, status) {
     if (!confirm(`${status === 'inactive' ? 'Deactivate' : 'Reactivate'} account "${username}"?`)) return;
     document.getElementById('toggleEmpUsername').value = username;
@@ -43,7 +43,7 @@ function toggleEmployee(username, status) {
     document.getElementById('form-toggle-emp').submit();
 }
 
-/*  Client edit modal*/
+/* ── EDIT CLIENT ── */
 function openEditClient(id, name, location) {
     document.getElementById('editClientId').value       = id;
     document.getElementById('editClientName').value     = name;
@@ -51,7 +51,7 @@ function openEditClient(id, name, location) {
     openModal('modal-edit-client');
 }
 
-/* client toggle status */
+/* ── TOGGLE CLIENT STATUS ── */
 function toggleClient(id, status) {
     if (!confirm(`${status === 'inactive' ? 'Deactivate' : 'Reactivate'} client "${id}"?`)) return;
     document.getElementById('toggleCliId').value     = id;
@@ -59,7 +59,7 @@ function toggleClient(id, status) {
     document.getElementById('form-toggle-cli').submit();
 }
 
-/* Employee table */
+/* ── EMPLOYEE TABLE FILTER ── */
 let currentEmpStatusFilter = 'all';
 
 function filterByStatus(status, el) {
@@ -74,21 +74,18 @@ function filterAccounts() { applyEmpFilters(); }
 function applyEmpFilters() {
     const q = document.getElementById('accountSearch').value.toLowerCase().trim();
     document.querySelectorAll('.emp-row').forEach(row => {
-        const text   = row.innerText.toLowerCase();
-        const status = row.dataset.status;
-        const matchQ = !q || text.includes(q);
-        const matchS = currentEmpStatusFilter === 'all' || status === currentEmpStatusFilter;
+        const matchQ = !q || row.innerText.toLowerCase().includes(q);
+        const matchS = currentEmpStatusFilter === 'all' || row.dataset.status === currentEmpStatusFilter;
         row.style.display = matchQ && matchS ? '' : 'none';
     });
 }
 
-
+/* ── CLIENT TABLE FILTER ── */
 let currentCliStatusFilter = 'all';
 
 function filterClientsByStatus(status, el) {
     currentCliStatusFilter = status;
-    const tabs = document.querySelectorAll('#section-clients .filter-tab');
-    tabs.forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#section-clients .filter-tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
     applyCliFilters();
 }
@@ -98,26 +95,13 @@ function filterClients() { applyCliFilters(); }
 function applyCliFilters() {
     const q = document.getElementById('clientSearch').value.toLowerCase().trim();
     document.querySelectorAll('.cli-row').forEach(row => {
-        const text   = row.innerText.toLowerCase();
-        const status = row.dataset.status;
-        const matchQ = !q || text.includes(q);
-        const matchS = currentCliStatusFilter === 'all' || status === currentCliStatusFilter;
+        const matchQ = !q || row.innerText.toLowerCase().includes(q);
+        const matchS = currentCliStatusFilter === 'all' || row.dataset.status === currentCliStatusFilter;
         row.style.display = matchQ && matchS ? '' : 'none';
     });
 }
 
-/* Fullname with proper case*/
-const fullNameInput = document.getElementById('fullName');
-if (fullNameInput) {
-    fullNameInput.addEventListener('input', () => {
-        const pos = fullNameInput.selectionStart;
-        fullNameInput.value = fullNameInput.value
-            .toLowerCase()
-            .replace(/\b\w/g, c => c.toUpperCase());
-        fullNameInput.setSelectionRange(pos, pos);
-    });
-}
-
+/* ── TITLE-CASE: Edit Employee Full Name ── */
 const editEmpFullName = document.getElementById('editEmpFullName');
 if (editEmpFullName) {
     editEmpFullName.addEventListener('input', () => {
@@ -129,42 +113,27 @@ if (editEmpFullName) {
     });
 }
 
-/* Department Uppercase */
-['department', 'editEmpDept'].forEach(id => {
+/* ── UPPERCASE: Edit Employee Dept & Invite Dept ── */
+['editEmpDept', 'inviteDeptInput'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { el.value = el.value.toUpperCase(); });
 });
 
-/* Animation for dissmiss */
+/* ── FLASH AUTO-DISMISS ── */
 const flashMsg = document.getElementById('flashMsg');
 if (flashMsg) {
     setTimeout(() => {
-        flashMsg.style.opacity = '0';
         flashMsg.style.transition = 'opacity 0.5s';
+        flashMsg.style.opacity    = '0';
         flashMsg.style.pointerEvents = 'none';
-        setTimeout(() => {
-            flashMsg.style.display = 'none';
-        }, 500);
+        setTimeout(() => { flashMsg.style.display = 'none'; }, 500);
     }, 4000);
 }
 
-/* IT makes sure the modal are closed ── */
+/* ── CLOSE ALL MODALS ON LOAD (safety reset) ── */
 document.querySelectorAll('.modal-overlay').forEach(el => el.classList.remove('open'));
 
-
-if (window.openCreateModalAfterRender) {
-    openModal('modal-create-employee');
-}
-
-/* ── NEW ACCOUNT BUTTON FIX (persist clickable) ── */
-const createEmployeeBtn = document.querySelector('[data-open-modal="modal-create-employee"]') || document.querySelector('button[onclick*="modal-create-employee"]');
-if (createEmployeeBtn) {
-    createEmployeeBtn.addEventListener('click', () => {
-        openModal('modal-create-employee');
-    });
-}
-
-/*URL Hash */
+/* ── URL HASH: jump to clients tab ── */
 (function () {
     const hash = window.location.hash.replace('#', '');
     if (hash === 'clients') {

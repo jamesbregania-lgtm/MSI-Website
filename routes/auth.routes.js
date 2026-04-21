@@ -1,10 +1,23 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const {
-  findActiveAccountByUsername
+  findActiveAccountByUsername,
+  usernameExists,
+  createUserAccount
 } = require('../database/accounts.store');
+const { findInviteByToken, updateInvite } = require('../database/invites.store');
 
 const router = express.Router();
+const fullNameRegex = /^[A-Za-z\s.-]{2,120}$/;
+const usernameRegex = /^[a-z0-9_]{3,20}$/;
+const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+
+function properCase(value = '') {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
 
 router.get('/', (req, res) => {
   if (!req.session.user) return res.redirect('/login');
@@ -21,6 +34,164 @@ router.get('/login', (req, res) => {
   }
 
   res.render('login', { error: null });
+});
+
+router.get('/account_setup', async (req, res) => {
+  const token = String(req.query.token || '').trim();
+
+  if (!token) {
+    return res.status(400).render('account_setup', {
+      invite: null,
+      error: 'Missing invite token.'
+    });
+  }
+
+  const invite = await findInviteByToken(token);
+
+  if (!invite) {
+    return res.status(404).render('account_setup', {
+      invite: null,
+      error: 'This invite link is invalid or has expired.'
+    });
+  }
+
+  const expiresAt = new Date(invite.expiresAt || 0);
+  if (Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() < Date.now()) {
+    await updateInvite(token, { status: 'expired' });
+    return res.status(410).render('account_setup', {
+      invite: null,
+      error: 'This invite link has expired.'
+    });
+  }
+
+  if (invite.status !== 'pending') {
+    return res.status(410).render('account_setup', {
+      invite: null,
+      error: 'This invite link has already been used.'
+    });
+  }
+
+  return res.render('account_setup', {
+    invite,
+    error: null,
+    formData: {
+      fullName: '',
+      username: ''
+    }
+  });
+});
+
+router.post('/account_setup', async (req, res) => {
+  const token = String(req.body.token || '').trim();
+  const fullNameInput = String(req.body.fullName || '');
+  const usernameInput = String(req.body.username || '');
+  const password = String(req.body.password || '');
+  const confirmPassword = String(req.body.confirmPassword || '');
+
+  const fullName = properCase(fullNameInput);
+  const username = usernameInput.trim().toLowerCase();
+
+  const renderWithError = async (status, invite, errorMessage) => {
+    return res.status(status).render('account_setup', {
+      invite,
+      error: errorMessage,
+      formData: {
+        fullName,
+        username
+      }
+    });
+  };
+
+  if (!token) {
+    return res.status(400).render('account_setup', {
+      invite: null,
+      error: 'Missing invite token.',
+      formData: {
+        fullName,
+        username
+      }
+    });
+  }
+
+  const invite = await findInviteByToken(token);
+
+  if (!invite) {
+    return res.status(404).render('account_setup', {
+      invite: null,
+      error: 'This invite link is invalid or has expired.',
+      formData: {
+        fullName,
+        username
+      }
+    });
+  }
+
+  const expiresAt = new Date(invite.expiresAt || 0);
+  if (Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() < Date.now()) {
+    await updateInvite(token, { status: 'expired' });
+    return renderWithError(410, null, 'This invite link has expired.');
+  }
+
+  if (invite.status !== 'pending') {
+    return renderWithError(410, null, 'This invite link has already been used.');
+  }
+
+  if (!fullNameRegex.test(fullName)) {
+    return renderWithError(400, invite, 'Please enter a valid full name.');
+  }
+
+  if (!usernameRegex.test(username)) {
+    return renderWithError(400, invite, 'Username must be 3-20 characters using lowercase letters, numbers, or underscore.');
+  }
+
+  if (!passwordRegex.test(password)) {
+    return renderWithError(400, invite, 'Password must be at least 8 characters and include both letters and numbers.');
+  }
+
+  if (password !== confirmPassword) {
+    return renderWithError(400, invite, 'Passwords do not match.');
+  }
+
+  if (await usernameExists(username)) {
+    return renderWithError(409, invite, 'That username is already taken. Please choose another one.');
+  }
+
+  const mappedRole = invite.role === 'admin' ? 'admin' : 'user';
+  const created = await createUserAccount({
+    username,
+    passwordHash: await bcrypt.hash(password, 10),
+    role: mappedRole,
+    fullName,
+    department: String(invite.department || '').trim().toUpperCase(),
+    branch: String(invite.branch || '').trim(),
+    status: 'active'
+  });
+
+  if (!created) {
+    return renderWithError(409, invite, 'That username is already taken. Please choose another one.');
+  }
+
+  await updateInvite(token, {
+    status: 'accepted',
+    acceptedAt: new Date().toISOString(),
+    acceptedUsername: username
+  });
+
+  req.session.user = {
+    username,
+    role: mappedRole,
+    fullName,
+    department: String(invite.department || '').trim().toUpperCase(),
+    branch: String(invite.branch || '').trim()
+  };
+
+  await new Promise((resolve, reject) => {
+    req.session.save(err => (err ? reject(err) : resolve()));
+  });
+
+  return mappedRole === 'admin'
+    ? res.redirect('/admin_account')
+    : res.redirect('/user_account');
 });
 
 router.post('/login', async (req, res) => {

@@ -178,5 +178,23 @@
     "department": "TECH",
     "branch": "Davao",
     "status": "inactive"
+  },
+  {
+    "username": "jbreganja",
+    "passwordHash": "$2a$10$i2tMs2sVNaywXOgL87NWrO3rrpJFOVnTEe1KnvcCBihi09/jviql.",
+    "role": "user",
+    "fullName": "James Francis Bregania",
+    "department": "A",
+    "branch": "Davao",
+    "status": "active"
+  },
+  {
+    "username": "hello",
+    "passwordHash": "$2a$10$LC1SkIhPrBaeh9mNrgeImObbZ0JLMbAp7MK3RSTb/e5g9wDKm63dW",
+    "role": "user",
+    "fullName": "Hello",
+    "department": "A",
+    "branch": "Davao",
+    "status": "active"
   }
 ]

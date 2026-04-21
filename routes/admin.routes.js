@@ -1,5 +1,12 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+let nodemailer = null;
+try {
+  nodemailer = require('nodemailer');
+} catch {
+  nodemailer = null;
+}
 const {
   listUserAccounts,
   usernameExists,
@@ -8,6 +15,7 @@ const {
   resetUserPassword,
   setUserStatus
 } = require('../database/accounts.store');
+const { createInvite } = require('../database/invites.store');
 const {
   listClients,
   createClient,
@@ -21,6 +29,9 @@ const router = express.Router();
 const usernameRegex = /^[a-z_]{4,20}$/;
 const passwordRegex = /^.{8,}$/;
 const nameRegex = /^[A-Za-z\s.-]+$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const inviteRoles = new Set(['employee', 'admin']);
+const inviteBranches = new Set(['Silang', 'Davao', 'Cebu']);
 
 function properCase(value = '') {
   return value
@@ -35,6 +46,87 @@ function slugify(value = '') {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function buildAppBaseUrl(req) {
+  const baseUrl = process.env.APP_BASE_URL;
+  if (baseUrl) {
+    return baseUrl.replace(/\/$/, '');
+  }
+
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function createInviteTransporter() {
+  const service = process.env.SMTP_SERVICE;
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  const isPlaceholderPass = [
+    'replace_with_gmail_app_password',
+    'your_gmail_app_password'
+  ].includes(String(pass || '').trim());
+
+  if (!user || !pass || isPlaceholderPass) {
+    return null;
+  }
+
+  if (service) {
+    return nodemailer.createTransport({
+      service,
+      auth: { user, pass }
+    });
+  }
+
+  if (!host && user && pass) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user, pass }
+    });
+  }
+
+  if (!host || !port) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass }
+  });
+}
+
+async function sendInviteEmail(req, invite) {
+  const transporter = createInviteTransporter();
+  if (!transporter) {
+    return { sent: false };
+  }
+
+  const inviteLink = `${buildAppBaseUrl(req)}/account_setup?token=${encodeURIComponent(invite.token)}`;
+  const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+
+  if (!fromAddress) {
+    return { sent: false };
+  }
+
+  await transporter.sendMail({
+    from: fromAddress,
+    to: invite.email,
+    subject: 'MSI account invite',
+    text: [
+      'Hello,',
+      '',
+      `You have been invited to join MSI as ${invite.role} in ${invite.department} (${invite.branch}).`,
+      `Use this link to complete your account setup: ${inviteLink}`,
+      '',
+      'This link expires in 24 hours.'
+    ].join('\n')
+  });
+
+  return { sent: true, inviteLink };
 }
 
 async function renderAdmin(req, res, { success = null, error = null } = {}) {
@@ -99,6 +191,66 @@ router.post('/employees/create', requireAdmin, async (req, res) => {
   });
 
   return await renderAdmin(req, res, { success: 'Employee account created successfully.' });
+});
+
+router.post('/employees/invite', requireAdmin, async (req, res) => {
+  const email = String(req.body.inviteEmail || '').trim().toLowerCase();
+  const role = String(req.body.inviteRole || '').trim().toLowerCase();
+  const branch = String(req.body.inviteBranch || '').trim();
+  const department = String(req.body.inviteDept || '').trim().toUpperCase();
+
+  if (!emailRegex.test(email)) {
+    return await renderAdmin(req, res, {
+      error: 'Please enter a valid employee email address.'
+    });
+  }
+
+  if (!inviteRoles.has(role)) {
+    return await renderAdmin(req, res, {
+      error: 'Please select a valid invite role.'
+    });
+  }
+
+  if (!inviteBranches.has(branch)) {
+    return await renderAdmin(req, res, {
+      error: 'Please select a valid branch.'
+    });
+  }
+
+  if (!department) {
+    return await renderAdmin(req, res, {
+      error: 'Department is required.'
+    });
+  }
+
+  const invite = {
+    token: crypto.randomBytes(24).toString('hex'),
+    email,
+    role,
+    branch,
+    department,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  };
+
+  await createInvite(invite);
+
+  let successMessage = `Invite created for ${email}.`;
+
+  try {
+    const emailResult = await sendInviteEmail(req, invite);
+    if (emailResult.sent) {
+      successMessage = `Invite email sent to ${email}.`;
+    } else {
+      successMessage = `Invite created for ${email}. Email delivery is not configured. Set SMTP_USER, SMTP_PASS, and optionally SMTP_SERVICE=gmail in your .env, then restart the server.`;
+    }
+  } catch (error) {
+    console.error('Invite email error:', error);
+    successMessage = `Invite created for ${email}. Email delivery failed (${error.code || error.message || 'unknown error'}), but the invite was saved locally.`;
+  }
+
+  return await renderAdmin(req, res, { success: successMessage });
 });
 
 router.post('/employees/update', requireAdmin, async (req, res) => {

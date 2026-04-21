@@ -21615,5 +21615,89 @@
         "recommendation": "sd"
       }
     ]
+  },
+  {
+    "clientId": "interphil",
+    "clientName": "Interphil",
+    "location": "ABI",
+    "unit": "CIJ",
+    "model": "9410",
+    "serialNo": "sn",
+    "dateInstalled": "21/04/2025",
+    "runningHours": 12,
+    "status": "Inactive",
+    "description": "new",
+    "submittedBy": "Hello",
+    "reports": [
+      {
+        "date": "21/04/2025",
+        "submittedBy": "Hello",
+        "updateIndex": null,
+        "technicians": [
+          "Hello",
+          "James Francis Bregania",
+          "Andrew Collantes"
+        ],
+        "problem": "",
+        "action": "",
+        "recommendation": ""
+      },
+      {
+        "date": "21/04/2026",
+        "submittedBy": "Hello",
+        "updateIndex": 0,
+        "technicians": [
+          "Hello",
+          "Carlos Santos"
+        ],
+        "problem": "new",
+        "action": "new",
+        "recommendation": "new"
+      }
+    ],
+    "maintenanceServiceDate": "",
+    "partServiceDates": {
+      "ENM 38941 GUTTER BLOCK": "21/04/2026",
+      "ENM 49967 EQUIP PRINT HEADBOARD": "21/04/2026"
+    },
+    "partServiceHours": {
+      "ENM 38941 GUTTER BLOCK": 12,
+      "ENM 49967 EQUIP PRINT HEADBOARD": 12
+    },
+    "updates": [
+      {
+        "date": "21/04/2026",
+        "submittedBy": "Hello",
+        "status": "Inactive",
+        "runningHours": 12,
+        "description": "new",
+        "maintenanceUpdated": false,
+        "maintenanceServiceDate": "",
+        "partsUpdated": [
+          "ENM 38941 GUTTER BLOCK",
+          "ENM 49967 EQUIP PRINT HEADBOARD"
+        ],
+        "partServiceDates": {
+          "ENM 38941 GUTTER BLOCK": "21/04/2026",
+          "ENM 49967 EQUIP PRINT HEADBOARD": "21/04/2026"
+        },
+        "partServiceHours": {
+          "ENM 38941 GUTTER BLOCK": 12,
+          "ENM 49967 EQUIP PRINT HEADBOARD": 12
+        },
+        "report": {
+          "date": "21/04/2026",
+          "submittedBy": "Hello",
+          "updateIndex": 0,
+          "technicians": [
+            "Hello",
+            "Carlos Santos"
+          ],
+          "problem": "new",
+          "action": "new",
+          "recommendation": "new"
+        }
+      }
+    ]
   }
 ]
