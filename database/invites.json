@@ -262,5 +262,15 @@
     "status": "pending",
     "createdAt": "2026-04-21T08:04:25.109Z",
     "expiresAt": "2026-04-22T08:04:25.109Z"
+  },
+  {
+    "token": "6ee0ddfe5c941ea1e5dde05bd1798be32e93de902eb08a4c",
+    "email": "jamesbregania@gmail.com",
+    "role": "employee",
+    "branch": "Silang",
+    "department": "S",
+    "status": "pending",
+    "createdAt": "2026-04-21T08:12:35.795Z",
+    "expiresAt": "2026-04-22T08:12:35.795Z"
   }
 ]
