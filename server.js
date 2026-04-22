@@ -1,7 +1,7 @@
 require('dotenv').config();
 const os = require('os');
 const app = require('./app');
-const { getDb, getDbConfigSummary } = require('./database/postgres');
+const { getDb, getDbConfigSummary } = require('./database/memory');
 const HOST = '0.0.0.0';
 const PORT = process.env.PORT || 3000;
 
@@ -28,8 +28,8 @@ async function startServer() {
     const dbConfig = getDbConfigSummary();
     const addresses = getLocalIpAddresses();
     console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`Postgres target: ${dbConfig.mode} ${dbConfig.host}/${dbConfig.database}`);
-    console.log(`Postgres SSL: ${dbConfig.ssl ? 'enabled' : 'disabled'}`);
+    console.log(`Storage mode: ${dbConfig.mode} ${dbConfig.host}/${dbConfig.database}`);
+    console.log(`Storage persistence: ${dbConfig.ssl ? 'enabled' : 'disabled'}`);
     console.log(`Invite base URL: ${baseUrl}`);
     addresses.forEach(address => {
       console.log(`Server running at http://${address}:${PORT}`);

@@ -1,36 +1,32 @@
-const { getDb, normalizeToken, mapInviteRow } = require('./postgres');
+const { getDb, normalizeToken } = require('./memory');
+
+function cloneInvite(invite) {
+  return { ...invite };
+}
 
 async function createInvite(invite) {
   const db = await getDb();
   const token = normalizeToken(invite.token);
 
-  await db.query(
-    `INSERT INTO invites
-    (token, email, role, branch, department, status, created_at, expires_at, accepted_at, accepted_username)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT (token) DO UPDATE SET
-      email = EXCLUDED.email,
-      role = EXCLUDED.role,
-      branch = EXCLUDED.branch,
-      department = EXCLUDED.department,
-      status = EXCLUDED.status,
-      created_at = EXCLUDED.created_at,
-      expires_at = EXCLUDED.expires_at,
-      accepted_at = EXCLUDED.accepted_at,
-      accepted_username = EXCLUDED.accepted_username`,
-    [
-      token,
-      String(invite.email || '').trim().toLowerCase(),
-      String(invite.role || ''),
-      String(invite.branch || ''),
-      String(invite.department || ''),
-      String(invite.status || 'pending'),
-      invite.createdAt ? String(invite.createdAt) : null,
-      invite.expiresAt ? String(invite.expiresAt) : null,
-      invite.acceptedAt ? String(invite.acceptedAt) : null,
-      invite.acceptedUsername ? String(invite.acceptedUsername) : null
-    ]
-  );
+  const nextInvite = {
+    token,
+    email: String(invite.email || '').trim().toLowerCase(),
+    role: String(invite.role || ''),
+    branch: String(invite.branch || ''),
+    department: String(invite.department || ''),
+    status: String(invite.status || 'pending'),
+    createdAt: invite.createdAt ? String(invite.createdAt) : null,
+    expiresAt: invite.expiresAt ? String(invite.expiresAt) : null,
+    acceptedAt: invite.acceptedAt ? String(invite.acceptedAt) : null,
+    acceptedUsername: invite.acceptedUsername ? String(invite.acceptedUsername) : null
+  };
+
+  const existingIndex = db.invites.findIndex(existing => existing.token === token);
+  if (existingIndex >= 0) {
+    db.invites[existingIndex] = nextInvite;
+  } else {
+    db.invites.push(nextInvite);
+  }
 
   return invite;
 }
@@ -42,76 +38,46 @@ async function findInviteByToken(token) {
   }
 
   const db = await getDb();
-  const { rows } = await db.query(
-    `SELECT token, email, role, branch, department, status, created_at, expires_at, accepted_at, accepted_username
-     FROM invites
-     WHERE token = $1
-     LIMIT 1`,
-    [key]
-  );
-
-  return rows[0] ? mapInviteRow(rows[0]) : null;
+  const found = db.invites.find(invite => invite.token === key);
+  return found ? cloneInvite(found) : null;
 }
 
 async function updateInvite(token, updates) {
   const key = normalizeToken(token);
   const db = await getDb();
-  const target = await db.query('SELECT token FROM invites WHERE token = $1 LIMIT 1', [key]);
+  const target = db.invites.find(invite => invite.token === key);
 
-  if (!target.rows[0]) {
+  if (!target) {
     return false;
   }
 
-  const fields = [];
-  const values = [];
-
   if (Object.prototype.hasOwnProperty.call(updates, 'email')) {
-    fields.push(`email = $${values.length + 1}`);
-    values.push(String(updates.email || '').trim().toLowerCase());
+    target.email = String(updates.email || '').trim().toLowerCase();
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'role')) {
-    fields.push(`role = $${values.length + 1}`);
-    values.push(String(updates.role || ''));
+    target.role = String(updates.role || '');
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'branch')) {
-    fields.push(`branch = $${values.length + 1}`);
-    values.push(String(updates.branch || ''));
+    target.branch = String(updates.branch || '');
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'department')) {
-    fields.push(`department = $${values.length + 1}`);
-    values.push(String(updates.department || ''));
+    target.department = String(updates.department || '');
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
-    fields.push(`status = $${values.length + 1}`);
-    values.push(String(updates.status || 'pending'));
+    target.status = String(updates.status || 'pending');
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'createdAt')) {
-    fields.push(`created_at = $${values.length + 1}`);
-    values.push(updates.createdAt ? String(updates.createdAt) : null);
+    target.createdAt = updates.createdAt ? String(updates.createdAt) : null;
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'expiresAt')) {
-    fields.push(`expires_at = $${values.length + 1}`);
-    values.push(updates.expiresAt ? String(updates.expiresAt) : null);
+    target.expiresAt = updates.expiresAt ? String(updates.expiresAt) : null;
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'acceptedAt')) {
-    fields.push(`accepted_at = $${values.length + 1}`);
-    values.push(updates.acceptedAt ? String(updates.acceptedAt) : null);
+    target.acceptedAt = updates.acceptedAt ? String(updates.acceptedAt) : null;
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'acceptedUsername')) {
-    fields.push(`accepted_username = $${values.length + 1}`);
-    values.push(updates.acceptedUsername ? String(updates.acceptedUsername) : null);
+    target.acceptedUsername = updates.acceptedUsername ? String(updates.acceptedUsername) : null;
   }
-
-  if (!fields.length) {
-    return true;
-  }
-
-  await db.query(
-    `UPDATE invites
-     SET ${fields.join(', ')}
-     WHERE token = $${values.length + 1}`,
-    [...values, key]
-  );
 
   return true;
 }
