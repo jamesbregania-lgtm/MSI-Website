@@ -1,69 +1,123 @@
-const fs = require('fs/promises');
-const path = require('path');
+const { getDb, normalizeToken } = require('./sqlite');
 
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : __dirname;
-const DB_FILE = path.join(DATA_DIR, 'invites.json');
-const LEGACY_DB_FILE = path.join(__dirname, 'invites.json');
-
-async function ensureDbFile() {
-  await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
-
-  try {
-    await fs.access(DB_FILE);
-  } catch {
-    try {
-      const legacyRaw = await fs.readFile(LEGACY_DB_FILE, 'utf8');
-      const legacyParsed = JSON.parse(legacyRaw);
-      const safeLegacy = Array.isArray(legacyParsed) ? legacyParsed : [];
-      await fs.writeFile(DB_FILE, JSON.stringify(safeLegacy, null, 2), 'utf8');
-    } catch {
-      await fs.writeFile(DB_FILE, JSON.stringify([], null, 2), 'utf8');
-    }
-  }
-}
-
-async function readInvites() {
-  await ensureDbFile();
-  const raw = await fs.readFile(DB_FILE, 'utf8');
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeInvites(invites) {
-  await fs.writeFile(DB_FILE, JSON.stringify(invites, null, 2), 'utf8');
+function mapInviteRow(row) {
+  return {
+    token: row.token,
+    email: row.email,
+    role: row.role,
+    branch: row.branch,
+    department: row.department,
+    status: row.status,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    acceptedAt: row.accepted_at,
+    acceptedUsername: row.accepted_username
+  };
 }
 
 async function createInvite(invite) {
-  const invites = await readInvites();
-  invites.push(invite);
-  await writeInvites(invites);
+  const db = await getDb();
+  const token = normalizeToken(invite.token);
+
+  await db.run(
+    `INSERT OR REPLACE INTO invites
+    (token, email, role, branch, department, status, created_at, expires_at, accepted_at, accepted_username)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      token,
+      String(invite.email || '').trim().toLowerCase(),
+      String(invite.role || ''),
+      String(invite.branch || ''),
+      String(invite.department || ''),
+      String(invite.status || 'pending'),
+      invite.createdAt ? String(invite.createdAt) : null,
+      invite.expiresAt ? String(invite.expiresAt) : null,
+      invite.acceptedAt ? String(invite.acceptedAt) : null,
+      invite.acceptedUsername ? String(invite.acceptedUsername) : null
+    ]
+  );
+
   return invite;
 }
 
 async function findInviteByToken(token) {
-  const invites = await readInvites();
-  const key = String(token || '').trim();
-  return invites.find(invite => String(invite.token || '').trim() === key) || null;
+  const key = normalizeToken(token);
+  if (!key) {
+    return null;
+  }
+
+  const db = await getDb();
+  const row = await db.get(
+    `SELECT token, email, role, branch, department, status, created_at, expires_at, accepted_at, accepted_username
+     FROM invites
+     WHERE token = ?
+     LIMIT 1`,
+    [key]
+  );
+
+  return row ? mapInviteRow(row) : null;
 }
 
 async function updateInvite(token, updates) {
-  const invites = await readInvites();
-  const key = String(token || '').trim();
-  const target = invites.find(invite => String(invite.token || '').trim() === key);
+  const key = normalizeToken(token);
+  const db = await getDb();
+  const target = await db.get('SELECT token FROM invites WHERE token = ? LIMIT 1', [key]);
 
   if (!target) {
     return false;
   }
 
-  Object.assign(target, updates);
-  await writeInvites(invites);
+  const fields = [];
+  const values = [];
+
+  if (Object.prototype.hasOwnProperty.call(updates, 'email')) {
+    fields.push('email = ?');
+    values.push(String(updates.email || '').trim().toLowerCase());
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'role')) {
+    fields.push('role = ?');
+    values.push(String(updates.role || ''));
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'branch')) {
+    fields.push('branch = ?');
+    values.push(String(updates.branch || ''));
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'department')) {
+    fields.push('department = ?');
+    values.push(String(updates.department || ''));
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
+    fields.push('status = ?');
+    values.push(String(updates.status || 'pending'));
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'createdAt')) {
+    fields.push('created_at = ?');
+    values.push(updates.createdAt ? String(updates.createdAt) : null);
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'expiresAt')) {
+    fields.push('expires_at = ?');
+    values.push(updates.expiresAt ? String(updates.expiresAt) : null);
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'acceptedAt')) {
+    fields.push('accepted_at = ?');
+    values.push(updates.acceptedAt ? String(updates.acceptedAt) : null);
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'acceptedUsername')) {
+    fields.push('accepted_username = ?');
+    values.push(updates.acceptedUsername ? String(updates.acceptedUsername) : null);
+  }
+
+  if (!fields.length) {
+    return true;
+  }
+
+  await db.run(
+    `UPDATE invites
+     SET ${fields.join(', ')}
+     WHERE token = ?`,
+    [...values, key]
+  );
+
   return true;
 }
 

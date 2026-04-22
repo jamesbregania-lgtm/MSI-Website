@@ -7,7 +7,9 @@ module.exports = session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // Use HTTPS-only cookies when the request is HTTPS (including trusted proxy setups).
+    // This avoids auth redirect loops on local/LAN HTTP even if NODE_ENV=production.
+    secure: 'auto',
     sameSite: 'lax',
     maxAge: 1000 * 60 * 60 * 8
   }
