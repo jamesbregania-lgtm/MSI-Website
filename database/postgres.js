@@ -102,6 +102,7 @@ function getPool() {
       pool = new Pool({
         connectionString: DATABASE_URL,
         ssl: getSslOption(),
+        family: 4,
         max: 10
       });
     } else {
@@ -112,6 +113,7 @@ function getPool() {
         user: PGUSER,
         password: PGPASSWORD,
         ssl: getSslOption(),
+        family: 4,
         max: 10
       });
     }
