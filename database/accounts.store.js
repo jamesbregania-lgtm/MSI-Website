@@ -1,20 +1,8 @@
-const { getDb } = require('./sqlite');
-
-function mapAccountRow(row) {
-  return {
-    username: row.username,
-    passwordHash: row.password_hash,
-    role: row.role,
-    fullName: row.full_name,
-    department: row.department,
-    branch: row.branch,
-    status: row.status
-  };
-}
+const { getDb, mapAccountRow } = require('./postgres');
 
 async function readAccounts() {
   const db = await getDb();
-  const rows = await db.all(
+  const { rows } = await db.query(
     `SELECT username, password_hash, role, full_name, department, branch, status
      FROM accounts
      ORDER BY username ASC`
@@ -24,19 +12,19 @@ async function readAccounts() {
 
 async function findActiveAccountByUsername(username) {
   const db = await getDb();
-  const row = await db.get(
+  const { rows } = await db.query(
     `SELECT username, password_hash, role, full_name, department, branch, status
      FROM accounts
-     WHERE username = ? AND status != 'inactive'
+     WHERE username = $1 AND status != 'inactive'
      LIMIT 1`,
     [String(username || '').trim().toLowerCase()]
   );
-  return row ? mapAccountRow(row) : null;
+  return rows[0] ? mapAccountRow(rows[0]) : null;
 }
 
 async function listUserAccounts() {
   const db = await getDb();
-  const rows = await db.all(
+  const { rows } = await db.query(
     `SELECT username, password_hash, role, full_name, department, branch, status
      FROM accounts
      WHERE role = 'user'
@@ -47,30 +35,30 @@ async function listUserAccounts() {
 
 async function usernameExists(username) {
   const db = await getDb();
-  const row = await db.get(
-    'SELECT 1 AS found FROM accounts WHERE username = ? LIMIT 1',
+  const { rows } = await db.query(
+    'SELECT 1 AS found FROM accounts WHERE username = $1 LIMIT 1',
     [String(username || '').trim().toLowerCase()]
   );
-  return Boolean(row);
+  return Boolean(rows[0]);
 }
 
 async function createUserAccount(account) {
   const db = await getDb();
   const username = String(account.username || '').trim().toLowerCase();
 
-  const existing = await db.get(
-    'SELECT 1 AS found FROM accounts WHERE username = ? LIMIT 1',
+  const existing = await db.query(
+    'SELECT 1 AS found FROM accounts WHERE username = $1 LIMIT 1',
     [username]
   );
 
-  if (existing) {
+  if (existing.rows[0]) {
     return false;
   }
 
-  await db.run(
+  await db.query(
     `INSERT INTO accounts
     (username, password_hash, role, full_name, department, branch, status, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
     [
       username,
       String(account.passwordHash || ''),
@@ -88,14 +76,14 @@ async function createUserAccount(account) {
 async function updateUserAccount(username, updates) {
   const db = await getDb();
   const key = String(username || '').trim().toLowerCase();
-  const target = await db.get(
+  const target = await db.query(
     `SELECT username FROM accounts
-     WHERE username = ? AND role = 'user'
+     WHERE username = $1 AND role = 'user'
      LIMIT 1`,
     [key]
   );
 
-  if (!target) {
+  if (!target.rows[0]) {
     return false;
   }
 
@@ -103,23 +91,23 @@ async function updateUserAccount(username, updates) {
   const values = [];
 
   if (Object.prototype.hasOwnProperty.call(updates, 'fullName')) {
-    fields.push('full_name = ?');
+    fields.push(`full_name = $${values.length + 1}`);
     values.push(String(updates.fullName || ''));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'department')) {
-    fields.push('department = ?');
+    fields.push(`department = $${values.length + 1}`);
     values.push(String(updates.department || ''));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'branch')) {
-    fields.push('branch = ?');
+    fields.push(`branch = $${values.length + 1}`);
     values.push(String(updates.branch || ''));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
-    fields.push('status = ?');
+    fields.push(`status = $${values.length + 1}`);
     values.push(String(updates.status || 'active'));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'passwordHash')) {
-    fields.push('password_hash = ?');
+    fields.push(`password_hash = $${values.length + 1}`);
     values.push(String(updates.passwordHash || ''));
   }
 
@@ -127,12 +115,12 @@ async function updateUserAccount(username, updates) {
     return true;
   }
 
-  fields.push("updated_at = datetime('now')");
+  fields.push(`updated_at = NOW()`);
 
-  await db.run(
+  await db.query(
     `UPDATE accounts
      SET ${fields.join(', ')}
-     WHERE username = ? AND role = 'user'`,
+     WHERE username = $${values.length + 1} AND role = 'user'`,
     [...values, key]
   );
 

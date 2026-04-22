@@ -1,43 +1,12 @@
-const { getDb } = require('./sqlite');
-
-function safeJsonParse(value, fallback) {
-  if (!value) return fallback;
-  try {
-    const parsed = JSON.parse(value);
-    return parsed ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function mapMachineRow(row) {
-  return {
-    clientId: row.client_id,
-    clientName: row.client_name || 'Unknown Client',
-    location: row.location || 'Unknown',
-    unit: row.unit || '',
-    model: row.model || '',
-    serialNo: row.serial_no || '',
-    dateInstalled: row.date_installed || '',
-    runningHours: Number(row.running_hours || 0),
-    status: row.status || '',
-    description: row.description || '',
-    submittedBy: row.submitted_by || '',
-    maintenanceServiceDate: row.maintenance_service_date || '',
-    partServiceDates: safeJsonParse(row.part_service_dates, {}),
-    partServiceHours: safeJsonParse(row.part_service_hours, {}),
-    updates: safeJsonParse(row.updates_json, []),
-    reports: safeJsonParse(row.reports_json, [])
-  };
-}
+const { getDb, mapMachineRow } = require('./postgres');
 
 async function listMachinesByClientId(clientId) {
   const key = String(clientId || '').trim().toLowerCase();
   const db = await getDb();
-  const rows = await db.all(
+  const { rows } = await db.query(
     `SELECT *
      FROM machines
-     WHERE lower(trim(client_id)) = ?
+     WHERE lower(trim(client_id)) = $1
      ORDER BY id DESC`,
     [key]
   );
@@ -46,14 +15,14 @@ async function listMachinesByClientId(clientId) {
 
 async function addMachine(machine) {
   const db = await getDb();
-  await db.run(
+  await db.query(
     `INSERT INTO machines
     (
       client_id, client_name, location, unit, model, serial_no, date_installed,
       running_hours, status, description, submitted_by, maintenance_service_date,
       part_service_dates, part_service_hours, updates_json, reports_json, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())`,
     [
       String(machine.clientId || '').trim().toLowerCase(),
       machine.clientName ? String(machine.clientName) : null,
@@ -77,13 +46,13 @@ async function addMachine(machine) {
 
 async function updateMachine(key, updates) {
   const db = await getDb();
-  const target = await db.get(
+  const target = await db.query(
     `SELECT *
      FROM machines
-     WHERE lower(trim(client_id)) = ?
-       AND lower(trim(serial_no)) = ?
-       AND lower(trim(model)) = ?
-       AND trim(date_installed) = ?
+     WHERE lower(trim(client_id)) = $1
+       AND lower(trim(serial_no)) = $2
+       AND lower(trim(model)) = $3
+       AND trim(date_installed) = $4
      LIMIT 1`,
     [
       String(key.clientId || '').trim().toLowerCase(),
@@ -93,11 +62,11 @@ async function updateMachine(key, updates) {
     ]
   );
 
-  if (!target) {
+  if (!target.rows[0]) {
     return null;
   }
 
-  const current = mapMachineRow(target);
+  const current = mapMachineRow(target.rows[0]);
   const nextPartServiceDates = updates.partServiceDates && typeof updates.partServiceDates === 'object'
     ? updates.partServiceDates
     : current.partServiceDates;
@@ -106,17 +75,17 @@ async function updateMachine(key, updates) {
     : current.partServiceHours;
   const nextUpdates = Array.isArray(updates.updates) ? updates.updates : current.updates;
 
-  await db.run(
+  await db.query(
     `UPDATE machines
-     SET running_hours = ?,
-         status = ?,
-         description = ?,
-         maintenance_service_date = ?,
-         part_service_dates = ?,
-         part_service_hours = ?,
-         updates_json = ?,
-         updated_at = datetime('now')
-     WHERE id = ?`,
+     SET running_hours = $1,
+       status = $2,
+       description = $3,
+       maintenance_service_date = $4,
+       part_service_dates = $5,
+       part_service_hours = $6,
+       updates_json = $7,
+         updated_at = NOW()
+     WHERE id = $8`,
     [
       Number.isFinite(Number(updates.runningHours)) ? Number(updates.runningHours) : current.runningHours,
       updates.status !== undefined ? String(updates.status) : current.status,
@@ -125,23 +94,23 @@ async function updateMachine(key, updates) {
       JSON.stringify(nextPartServiceDates),
       JSON.stringify(nextPartServiceHours),
       JSON.stringify(nextUpdates),
-      target.id
+      target.rows[0].id
     ]
   );
 
-  const updated = await db.get('SELECT * FROM machines WHERE id = ?', [target.id]);
-  return mapMachineRow(updated);
+  const updated = await db.query('SELECT * FROM machines WHERE id = $1', [target.rows[0].id]);
+  return mapMachineRow(updated.rows[0]);
 }
 
 async function appendMachineReport(key, report) {
   const db = await getDb();
-  const target = await db.get(
+  const target = await db.query(
     `SELECT *
      FROM machines
-     WHERE lower(trim(client_id)) = ?
-       AND lower(trim(serial_no)) = ?
-       AND lower(trim(model)) = ?
-       AND trim(date_installed) = ?
+     WHERE lower(trim(client_id)) = $1
+       AND lower(trim(serial_no)) = $2
+       AND lower(trim(model)) = $3
+       AND trim(date_installed) = $4
      LIMIT 1`,
     [
       String(key.clientId || '').trim().toLowerCase(),
@@ -151,11 +120,11 @@ async function appendMachineReport(key, report) {
     ]
   );
 
-  if (!target) {
+  if (!target.rows[0]) {
     return null;
   }
 
-  const mapped = mapMachineRow(target);
+  const mapped = mapMachineRow(target.rows[0]);
   const reports = Array.isArray(mapped.reports) ? mapped.reports.slice() : [];
   const updates = Array.isArray(mapped.updates) ? mapped.updates.slice() : [];
   reports.push(report);
@@ -172,15 +141,17 @@ async function appendMachineReport(key, report) {
     updateTarget.report = { ...report };
   }
 
-  await db.run(
+  await db.query(
     `UPDATE machines
-     SET reports_json = ?, updates_json = ?, updated_at = datetime('now')
-     WHERE id = ?`,
-    [JSON.stringify(reports), JSON.stringify(updates), target.id]
+     SET reports_json = $1,
+         updates_json = $2,
+         updated_at = NOW()
+     WHERE id = $3`,
+    [JSON.stringify(reports), JSON.stringify(updates), target.rows[0].id]
   );
 
-  const updated = await db.get('SELECT * FROM machines WHERE id = ?', [target.id]);
-  return mapMachineRow(updated);
+  const updated = await db.query('SELECT * FROM machines WHERE id = $1', [target.rows[0].id]);
+  return mapMachineRow(updated.rows[0]);
 }
 
 module.exports = {

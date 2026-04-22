@@ -1,28 +1,23 @@
-const { getDb, normalizeToken } = require('./sqlite');
-
-function mapInviteRow(row) {
-  return {
-    token: row.token,
-    email: row.email,
-    role: row.role,
-    branch: row.branch,
-    department: row.department,
-    status: row.status,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at,
-    acceptedAt: row.accepted_at,
-    acceptedUsername: row.accepted_username
-  };
-}
+const { getDb, normalizeToken, mapInviteRow } = require('./postgres');
 
 async function createInvite(invite) {
   const db = await getDb();
   const token = normalizeToken(invite.token);
 
-  await db.run(
-    `INSERT OR REPLACE INTO invites
+  await db.query(
+    `INSERT INTO invites
     (token, email, role, branch, department, status, created_at, expires_at, accepted_at, accepted_username)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    ON CONFLICT (token) DO UPDATE SET
+      email = EXCLUDED.email,
+      role = EXCLUDED.role,
+      branch = EXCLUDED.branch,
+      department = EXCLUDED.department,
+      status = EXCLUDED.status,
+      created_at = EXCLUDED.created_at,
+      expires_at = EXCLUDED.expires_at,
+      accepted_at = EXCLUDED.accepted_at,
+      accepted_username = EXCLUDED.accepted_username`,
     [
       token,
       String(invite.email || '').trim().toLowerCase(),
@@ -47,23 +42,23 @@ async function findInviteByToken(token) {
   }
 
   const db = await getDb();
-  const row = await db.get(
+  const { rows } = await db.query(
     `SELECT token, email, role, branch, department, status, created_at, expires_at, accepted_at, accepted_username
      FROM invites
-     WHERE token = ?
+     WHERE token = $1
      LIMIT 1`,
     [key]
   );
 
-  return row ? mapInviteRow(row) : null;
+  return rows[0] ? mapInviteRow(rows[0]) : null;
 }
 
 async function updateInvite(token, updates) {
   const key = normalizeToken(token);
   const db = await getDb();
-  const target = await db.get('SELECT token FROM invites WHERE token = ? LIMIT 1', [key]);
+  const target = await db.query('SELECT token FROM invites WHERE token = $1 LIMIT 1', [key]);
 
-  if (!target) {
+  if (!target.rows[0]) {
     return false;
   }
 
@@ -71,39 +66,39 @@ async function updateInvite(token, updates) {
   const values = [];
 
   if (Object.prototype.hasOwnProperty.call(updates, 'email')) {
-    fields.push('email = ?');
+    fields.push(`email = $${values.length + 1}`);
     values.push(String(updates.email || '').trim().toLowerCase());
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'role')) {
-    fields.push('role = ?');
+    fields.push(`role = $${values.length + 1}`);
     values.push(String(updates.role || ''));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'branch')) {
-    fields.push('branch = ?');
+    fields.push(`branch = $${values.length + 1}`);
     values.push(String(updates.branch || ''));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'department')) {
-    fields.push('department = ?');
+    fields.push(`department = $${values.length + 1}`);
     values.push(String(updates.department || ''));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
-    fields.push('status = ?');
+    fields.push(`status = $${values.length + 1}`);
     values.push(String(updates.status || 'pending'));
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'createdAt')) {
-    fields.push('created_at = ?');
+    fields.push(`created_at = $${values.length + 1}`);
     values.push(updates.createdAt ? String(updates.createdAt) : null);
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'expiresAt')) {
-    fields.push('expires_at = ?');
+    fields.push(`expires_at = $${values.length + 1}`);
     values.push(updates.expiresAt ? String(updates.expiresAt) : null);
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'acceptedAt')) {
-    fields.push('accepted_at = ?');
+    fields.push(`accepted_at = $${values.length + 1}`);
     values.push(updates.acceptedAt ? String(updates.acceptedAt) : null);
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'acceptedUsername')) {
-    fields.push('accepted_username = ?');
+    fields.push(`accepted_username = $${values.length + 1}`);
     values.push(updates.acceptedUsername ? String(updates.acceptedUsername) : null);
   }
 
@@ -111,10 +106,10 @@ async function updateInvite(token, updates) {
     return true;
   }
 
-  await db.run(
+  await db.query(
     `UPDATE invites
      SET ${fields.join(', ')}
-     WHERE token = ?`,
+     WHERE token = $${values.length + 1}`,
     [...values, key]
   );
 

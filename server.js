@@ -1,7 +1,7 @@
 require('dotenv').config();
 const os = require('os');
 const app = require('./app');
-const { getDb, SQLITE_FILE, DATA_DIR } = require('./database/sqlite');
+const { getDb, getDbConfigSummary } = require('./database/postgres');
 const HOST = '0.0.0.0';
 const PORT = process.env.PORT || 3000;
 
@@ -25,10 +25,11 @@ async function startServer() {
 
   app.listen(PORT, HOST, () => {
     const baseUrl = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
+    const dbConfig = getDbConfigSummary();
     const addresses = getLocalIpAddresses();
     console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`SQLite database: ${SQLITE_FILE}`);
-    console.log(`SQLite data dir: ${DATA_DIR}`);
+    console.log(`Postgres target: ${dbConfig.mode} ${dbConfig.host}/${dbConfig.database}`);
+    console.log(`Postgres SSL: ${dbConfig.ssl ? 'enabled' : 'disabled'}`);
     console.log(`Invite base URL: ${baseUrl}`);
     addresses.forEach(address => {
       console.log(`Server running at http://${address}:${PORT}`);

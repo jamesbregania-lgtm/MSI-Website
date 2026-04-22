@@ -1,17 +1,8 @@
-const { getDb } = require('./sqlite');
-
-function mapClientRow(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    location: row.location || '',
-    status: row.status
-  };
-}
+const { getDb, mapClientRow } = require('./postgres');
 
 async function listClients() {
   const db = await getDb();
-  const rows = await db.all(
+  const { rows } = await db.query(
     `SELECT id, name, location, status
      FROM clients
      ORDER BY name ASC`
@@ -21,7 +12,7 @@ async function listClients() {
 
 async function listActiveClients() {
   const db = await getDb();
-  const rows = await db.all(
+  const { rows } = await db.query(
     `SELECT id, name, location, status
      FROM clients
      WHERE status != 'inactive'
@@ -33,45 +24,45 @@ async function listActiveClients() {
 async function findClientById(clientId) {
   const key = String(clientId || '').toLowerCase();
   const db = await getDb();
-  const row = await db.get(
+  const { rows } = await db.query(
     `SELECT id, name, location, status
      FROM clients
-     WHERE lower(id) = ?
+     WHERE lower(id) = $1
      LIMIT 1`,
     [key]
   );
-  return row ? mapClientRow(row) : null;
+  return rows[0] ? mapClientRow(rows[0]) : null;
 }
 
 async function findActiveClientByName(name) {
   const key = String(name || '').trim().toLowerCase();
   const db = await getDb();
-  const row = await db.get(
+  const { rows } = await db.query(
     `SELECT id, name, location, status
      FROM clients
-     WHERE lower(trim(name)) = ? AND status != 'inactive'
+     WHERE lower(trim(name)) = $1 AND status != 'inactive'
      LIMIT 1`,
     [key]
   );
-  return row ? mapClientRow(row) : null;
+  return rows[0] ? mapClientRow(rows[0]) : null;
 }
 
 async function createClient(client) {
   const db = await getDb();
   const id = String(client.id || '').trim().toLowerCase();
 
-  const existing = await db.get(
-    'SELECT 1 AS found FROM clients WHERE id = ? LIMIT 1',
+  const existing = await db.query(
+    'SELECT 1 AS found FROM clients WHERE id = $1 LIMIT 1',
     [id]
   );
 
-  if (existing) {
+  if (existing.rows[0]) {
     return false;
   }
 
-  await db.run(
+  await db.query(
     `INSERT INTO clients (id, name, location, status, updated_at)
-     VALUES (?, ?, ?, ?, datetime('now'))`,
+     VALUES ($1, $2, $3, $4, NOW())`,
     [
       id,
       String(client.name || '').trim(),
@@ -86,12 +77,12 @@ async function createClient(client) {
 async function updateClient(clientId, updates) {
   const db = await getDb();
   const key = String(clientId || '').trim().toLowerCase();
-  const target = await db.get(
-    'SELECT id FROM clients WHERE id = ? LIMIT 1',
+  const target = await db.query(
+    'SELECT id FROM clients WHERE id = $1 LIMIT 1',
     [key]
   );
 
-  if (!target) {
+  if (!target.rows[0]) {
     return false;
   }
 
@@ -99,15 +90,15 @@ async function updateClient(clientId, updates) {
   const values = [];
 
   if (Object.prototype.hasOwnProperty.call(updates, 'name')) {
-    fields.push('name = ?');
+    fields.push(`name = $${values.length + 1}`);
     values.push(String(updates.name || '').trim());
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'location')) {
-    fields.push('location = ?');
+    fields.push(`location = $${values.length + 1}`);
     values.push(String(updates.location || '').trim());
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
-    fields.push('status = ?');
+    fields.push(`status = $${values.length + 1}`);
     values.push(String(updates.status || 'active'));
   }
 
@@ -115,12 +106,12 @@ async function updateClient(clientId, updates) {
     return true;
   }
 
-  fields.push("updated_at = datetime('now')");
+  fields.push('updated_at = NOW()');
 
-  await db.run(
+  await db.query(
     `UPDATE clients
      SET ${fields.join(', ')}
-     WHERE id = ?`,
+     WHERE id = $${values.length + 1}`,
     [...values, key]
   );
 

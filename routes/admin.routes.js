@@ -48,9 +48,28 @@ function slugify(value = '') {
     .replace(/^-+|-+$/g, '');
 }
 
+function isLocalBaseUrl(baseUrl) {
+  const normalized = String(baseUrl || '').trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const hostMatch = normalized.match(/^(?:https?:\/\/)?([^/:?#]+)/i);
+  const host = hostMatch ? hostMatch[1] : normalized;
+
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    /^192\.168\.\d+\.\d+$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)
+  );
+}
+
 function buildAppBaseUrl(req) {
   const baseUrl = process.env.APP_BASE_URL;
-  if (baseUrl) {
+  if (baseUrl && !isLocalBaseUrl(baseUrl)) {
     return baseUrl.replace(/\/$/, '');
   }
 
