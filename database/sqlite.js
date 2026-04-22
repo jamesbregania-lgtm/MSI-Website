@@ -273,5 +273,7 @@ async function getDb() {
 
 module.exports = {
   getDb,
-  normalizeToken
+  normalizeToken,
+  SQLITE_FILE,
+  DATA_DIR
 };

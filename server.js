@@ -1,7 +1,7 @@
 require('dotenv').config();
 const os = require('os');
 const app = require('./app');
-const { getDb } = require('./database/sqlite');
+const { getDb, SQLITE_FILE, DATA_DIR } = require('./database/sqlite');
 const HOST = '0.0.0.0';
 const PORT = process.env.PORT || 3000;
 
@@ -24,8 +24,12 @@ async function startServer() {
   await getDb();
 
   app.listen(PORT, HOST, () => {
+    const baseUrl = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
     const addresses = getLocalIpAddresses();
     console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`SQLite database: ${SQLITE_FILE}`);
+    console.log(`SQLite data dir: ${DATA_DIR}`);
+    console.log(`Invite base URL: ${baseUrl}`);
     addresses.forEach(address => {
       console.log(`Server running at http://${address}:${PORT}`);
     });
