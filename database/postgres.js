@@ -99,8 +99,13 @@ function getPool() {
     }
 
     if (DATABASE_URL) {
+      const parsedUrl = new URL(DATABASE_URL);
       pool = new Pool({
-        connectionString: DATABASE_URL,
+        host: parsedUrl.hostname,
+        port: parsedUrl.port ? Number(parsedUrl.port) : 5432,
+        database: parsedUrl.pathname.replace(/^\//, ''),
+        user: decodeURIComponent(parsedUrl.username || 'postgres'),
+        password: decodeURIComponent(parsedUrl.password || ''),
         ssl: getSslOption(),
         family: 4,
         max: 10
