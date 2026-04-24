@@ -1,4 +1,4 @@
-const { getDb } = require('./memory');
+const { getDb, persistDb } = require('./memory');
 
 function cloneMachine(machine) {
   return {
@@ -43,6 +43,7 @@ async function addMachine(machine) {
   };
 
   db.machines.push(identity);
+  await persistDb();
 }
 
 async function updateMachine(key, updates) {
@@ -65,6 +66,8 @@ async function updateMachine(key, updates) {
   target.partServiceDates = updates.partServiceDates && typeof updates.partServiceDates === 'object' ? updates.partServiceDates : target.partServiceDates;
   target.partServiceHours = updates.partServiceHours && typeof updates.partServiceHours === 'object' ? updates.partServiceHours : target.partServiceHours;
   target.updates = Array.isArray(updates.updates) ? updates.updates : target.updates;
+
+  await persistDb();
 
   return cloneMachine(target);
 }
@@ -100,6 +103,8 @@ async function appendMachineReport(key, report) {
 
   target.reports = reports;
   target.updates = updates;
+
+  await persistDb();
 
   return cloneMachine(target);
 }

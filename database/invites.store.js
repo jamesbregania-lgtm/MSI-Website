@@ -1,4 +1,4 @@
-const { getDb, normalizeToken } = require('./memory');
+const { getDb, normalizeToken, persistDb } = require('./memory');
 
 function cloneInvite(invite) {
   return { ...invite };
@@ -27,6 +27,8 @@ async function createInvite(invite) {
   } else {
     db.invites.push(nextInvite);
   }
+
+  await persistDb();
 
   return invite;
 }
@@ -78,6 +80,8 @@ async function updateInvite(token, updates) {
   if (Object.prototype.hasOwnProperty.call(updates, 'acceptedUsername')) {
     target.acceptedUsername = updates.acceptedUsername ? String(updates.acceptedUsername) : null;
   }
+
+  await persistDb();
 
   return true;
 }

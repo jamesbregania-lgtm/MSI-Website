@@ -1,4 +1,4 @@
-const { getDb } = require('./memory');
+const { getDb, persistDb } = require('./memory');
 
 function cloneClient(client) {
   return { ...client };
@@ -50,6 +50,8 @@ async function createClient(client) {
     status: String(client.status || 'active')
   });
 
+  await persistDb();
+
   return true;
 }
 
@@ -71,6 +73,8 @@ async function updateClient(clientId, updates) {
   if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
     target.status = String(updates.status || 'active');
   }
+
+  await persistDb();
 
   return true;
 }

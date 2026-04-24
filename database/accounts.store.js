@@ -1,4 +1,4 @@
-const { getDb } = require('./memory');
+const { getDb, persistDb } = require('./memory');
 
 function cloneAccount(account) {
   return { ...account };
@@ -52,6 +52,8 @@ async function createUserAccount(account) {
     status: String(account.status || 'active')
   });
 
+  await persistDb();
+
   return true;
 }
 
@@ -79,6 +81,8 @@ async function updateUserAccount(username, updates) {
   if (Object.prototype.hasOwnProperty.call(updates, 'passwordHash')) {
     target.passwordHash = String(updates.passwordHash || '');
   }
+
+  await persistDb();
 
   return true;
 }

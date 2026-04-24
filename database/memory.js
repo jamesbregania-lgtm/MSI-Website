@@ -1,5 +1,8 @@
 let state = null;
 let initializationPromise = null;
+let kvClient = undefined;
+
+const DB_STATE_KEY = String(process.env.DB_STATE_KEY || 'printer-asset-app:state').trim();
 
 const SEED_ACCOUNTS = [
   {
@@ -70,7 +73,13 @@ const SEED_CLIENTS = [
 ];
 
 function normalizeToken(token) {
-  return String(token || '')
+  let decoded;
+  try {
+    decoded = decodeURIComponent(String(token || ''));
+  } catch {
+    decoded = String(token || '');
+  }
+  return decoded
     .trim()
     .toLowerCase()
     .replace(/[^a-f0-9]/g, '');
@@ -137,15 +146,62 @@ function mapInviteRow(row) {
   };
 }
 
+function createSeedState() {
+  return {
+    accounts: SEED_ACCOUNTS.map(account => ({ ...account })),
+    clients: SEED_CLIENTS.map(client => ({ ...client })),
+    invites: [],
+    machines: []
+  };
+}
+
+function normalizeStateShape(candidate) {
+  const source = candidate && typeof candidate === 'object' ? candidate : {};
+  return {
+    accounts: Array.isArray(source.accounts) ? source.accounts.map(mapAccountRow) : createSeedState().accounts,
+    clients: Array.isArray(source.clients) ? source.clients.map(mapClientRow) : createSeedState().clients,
+    invites: Array.isArray(source.invites) ? source.invites.map(mapInviteRow) : [],
+    machines: Array.isArray(source.machines) ? source.machines.map(mapMachineRow) : []
+  };
+}
+
+function getKvClient() {
+  if (kvClient !== undefined) {
+    return kvClient;
+  }
+
+  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+    kvClient = null;
+    return kvClient;
+  }
+
+  try {
+    const { kv } = require('@vercel/kv');
+    kvClient = kv || null;
+  } catch (error) {
+    console.warn('Vercel KV package not available, falling back to in-memory mode.');
+    kvClient = null;
+  }
+
+  return kvClient;
+}
+
 async function getDb() {
   if (!initializationPromise) {
     initializationPromise = (async () => {
-      state = {
-        accounts: SEED_ACCOUNTS.map(account => ({ ...account })),
-        clients: SEED_CLIENTS.map(client => ({ ...client })),
-        invites: [],
-        machines: []
-      };
+      const kv = getKvClient();
+      if (!kv) {
+        state = createSeedState();
+        return state;
+      }
+
+      const stored = await kv.get(DB_STATE_KEY);
+      if (stored && typeof stored === 'object') {
+        state = normalizeStateShape(stored);
+      } else {
+        state = createSeedState();
+        await kv.set(DB_STATE_KEY, state);
+      }
 
       return state;
     })();
@@ -154,17 +210,29 @@ async function getDb() {
   return initializationPromise;
 }
 
+async function persistDb() {
+  const kv = getKvClient();
+  if (!kv || !state) {
+    return false;
+  }
+
+  await kv.set(DB_STATE_KEY, state);
+  return true;
+}
+
 function getDbConfigSummary() {
+  const usingKv = Boolean(getKvClient());
   return {
-    mode: 'memory',
-    host: 'localhost',
-    database: 'in-memory',
-    ssl: false
+    mode: usingKv ? 'vercel-kv' : 'memory',
+    host: usingKv ? 'vercel' : 'localhost',
+    database: usingKv ? DB_STATE_KEY : 'in-memory',
+    ssl: usingKv
   };
 }
 
 module.exports = {
   getDb,
+  persistDb,
   getDbConfigSummary,
   normalizeToken,
   mapAccountRow,
